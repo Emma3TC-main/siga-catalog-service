@@ -1,0 +1,254 @@
+openapi: 3.0.3
+info:
+  title: SIGA Catalog API
+  version: 1.2.0
+  description: Categories, products, suppliers, UoM and multiple per-product unit conversions.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+paths:
+  /products:
+    get:
+      summary: List/filter products
+      responses:
+        '200':
+          description: Product page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductPage' }
+    post:
+      summary: Create product and its conversions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProductRequest' }
+      responses:
+        '201':
+          description: Product created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductResponse' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /products/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      summary: Get product
+      responses:
+        '200':
+          description: Product
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductResponse' }
+    put:
+      summary: Update product, traceability and conversions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProductRequest' }
+      responses:
+        '200':
+          description: Product updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductResponse' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /suppliers:
+    get:
+      summary: List/filter suppliers
+      parameters:
+        - in: query
+          name: active
+          schema: { type: boolean }
+        - in: query
+          name: q
+          schema: { type: string }
+      responses:
+        '200':
+          description: Supplier page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SupplierPage' }
+    post:
+      summary: Create supplier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SupplierRequest' }
+      responses:
+        '201':
+          description: Supplier created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SupplierResponse' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /suppliers/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      summary: Get supplier
+      responses:
+        '200':
+          description: Supplier
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SupplierResponse' }
+    put:
+      summary: Update or deactivate supplier without deleting history
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SupplierRequest' }
+      responses:
+        '200':
+          description: Supplier updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SupplierResponse' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /categories:
+    get:
+      summary: List categories
+      responses:
+        '200':
+          description: Categories
+    post:
+      summary: Create category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CategoryRequest' }
+      responses:
+        '201': { description: Category created }
+  /units:
+    get:
+      summary: List units
+      responses:
+        '200': { description: Units }
+    post:
+      summary: Create unit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UnitRequest' }
+      responses:
+        '201': { description: Unit created }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  responses:
+    Conflict:
+      description: Duplicate/version/domain conflict
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+  schemas:
+    Problem:
+      type: object
+      properties:
+        title: { type: string }
+        status: { type: integer }
+        code: { type: string }
+        detail: { type: string }
+        correlationId: { type: string, format: uuid }
+    SupplierRequest:
+      type: object
+      required: [code, taxId, businessName]
+      properties:
+        code: { type: string, maxLength: 50 }
+        taxId: { type: string, maxLength: 20, description: RUC u otro identificador tributario parametrizable }
+        businessName: { type: string, maxLength: 200 }
+        tradeName: { type: string, maxLength: 200 }
+        contactName: { type: string, maxLength: 160 }
+        phone: { type: string, maxLength: 40 }
+        email: { type: string, format: email, maxLength: 254 }
+        address: { type: string, maxLength: 300 }
+        active: { type: boolean, default: true }
+    SupplierResponse:
+      allOf:
+        - $ref: '#/components/schemas/SupplierRequest'
+        - type: object
+          required: [id, version]
+          properties:
+            id: { type: string, format: uuid }
+            version: { type: integer, format: int64 }
+    SupplierPage:
+      type: object
+      properties:
+        content:
+          type: array
+          items: { $ref: '#/components/schemas/SupplierResponse' }
+        page: { type: integer }
+        size: { type: integer }
+        totalElements: { type: integer, format: int64 }
+    CategoryRequest:
+      type: object
+      required: [code, name, categoryType]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        categoryType: { type: string, enum: [MATERIAL, INSUMO, REPUESTO, MAQUINARIA] }
+    UnitRequest:
+      type: object
+      required: [code, name, symbol, dimension]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        symbol: { type: string }
+        dimension: { type: string }
+    UnitConversionRequest:
+      type: object
+      required: [fromUnitId, toUnitId, factor]
+      properties:
+        fromUnitId: { type: string, format: uuid }
+        toUnitId: { type: string, format: uuid }
+        factor: { type: number, format: double, exclusiveMinimum: 0 }
+        active: { type: boolean, default: true }
+    ProductRequest:
+      type: object
+      required: [sku, name, categoryId, productType, storageUnitId, baseUnitId]
+      properties:
+        sku: { type: string }
+        name: { type: string }
+        categoryId: { type: string, format: uuid }
+        productType: { type: string, enum: [MATERIAL, INSUMO, REPUESTO, MAQUINARIA] }
+        storageUnitId: { type: string, format: uuid }
+        baseUnitId: { type: string, format: uuid }
+        minStock: { type: number, minimum: 0 }
+        requiresLot: { type: boolean, default: false }
+        requiresHeatNumber: { type: boolean, default: false }
+        requiresExpiry: { type: boolean, default: false }
+        requiresSerial: { type: boolean, default: false }
+        technicalAttributes: { type: object, additionalProperties: true }
+        conversions:
+          type: array
+          items: { $ref: '#/components/schemas/UnitConversionRequest' }
+    ProductResponse:
+      allOf:
+        - $ref: '#/components/schemas/ProductRequest'
+        - type: object
+          required: [id, active, version]
+          properties:
+            id: { type: string, format: uuid }
+            active: { type: boolean }
+            version: { type: integer, format: int64 }
+    ProductPage:
+      type: object
+      properties:
+        content:
+          type: array
+          items: { $ref: '#/components/schemas/ProductResponse' }
+        page: { type: integer }
+        size: { type: integer }
+        totalElements: { type: integer, format: int64 }
