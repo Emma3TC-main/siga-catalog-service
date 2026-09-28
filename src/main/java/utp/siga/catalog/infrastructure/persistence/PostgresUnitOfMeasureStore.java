@@ -29,4 +29,23 @@ public class PostgresUnitOfMeasureStore implements UnitOfMeasureStore {
                 (row, index) -> new UnitOfMeasureSummary(row.getObject("id", java.util.UUID.class), row.getString("code"),
                         row.getString("name"), row.getString("symbol"), row.getString("dimension"), row.getBoolean("active")));
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean isActive(java.util.UUID id) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT EXISTS (SELECT 1 FROM catalog.unit_measure WHERE id=? AND active=true)", Boolean.class, id));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean exists(java.util.UUID id) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM catalog.unit_measure WHERE id=?)", Boolean.class, id));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public String code(java.util.UUID id) {
+        return jdbc.queryForObject("SELECT code FROM catalog.unit_measure WHERE id=?", String.class, id);
+    }
 }

@@ -28,7 +28,7 @@ def main():
     identity = dict(line.split('=', 1) for line in (IDENTITY / '.env').read_text().splitlines() if '=' in line and not line.startswith('#'))
     # Fail before login if historical MFA enrollment is unavailable.
     secret = json.loads((IDENTITY / '.local/demo-mfa.json').read_text())['secret']
-    jar = (ROOT / '.local/catalog.jar').read_text(encoding='utf-8-sig').strip()
+    jar = os.environ.get('CATALOG_SMOKE_JAR') or (ROOT / '.local/catalog.jar').read_text(encoding='utf-8-sig').strip()
     env = os.environ.copy()
     # Isolated application process, same implementation/JAR, real Identity JWKS.
     env.update(CATALOG_DB_URL=f"jdbc:postgresql://127.0.0.1:{config['dbPort']}/siga_catalog_local_test",
@@ -72,6 +72,23 @@ def main():
             call(base, 'POST', '/api/v1/units', unit, token, 201)
             call(base, 'POST', '/api/v1/units', unit, token, 409)
             call(base, 'POST', '/api/v1/units', {}, token, 400)
+            active_categories = [item for item in categories if item['active']]
+            active_units = [item for item in units if item['active']]
+            assert active_categories and len(active_units) >= 2, 'Product smoke requires one category and two active units'
+            product = {
+                'sku': 'SMOKEP' + uuid.uuid4().hex[:12], 'name': 'Product Identity smoke',
+                'categoryId': active_categories[0]['id'], 'productType': active_categories[0]['categoryType'],
+                'storageUnitId': active_units[0]['id'], 'baseUnitId': active_units[1]['id'], 'minStock': 1.25,
+                'conversions': [{'fromUnitId': active_units[0]['id'], 'toUnitId': active_units[1]['id'], 'factor': 2.5}]
+            }
+            call(base, 'POST', '/api/v1/products', product, expected=401)
+            created = call(base, 'POST', '/api/v1/products', product, token, 201)
+            assert created['sku'] == product['sku'] and created['active'] and created['version'] == 0
+            call(base, 'POST', '/api/v1/products', product, token, 409)
+            invalid = dict(product)
+            invalid['sku'] = 'SMOKEP' + uuid.uuid4().hex[:12]
+            invalid['conversions'] = []
+            call(base, 'POST', '/api/v1/products', invalid, token, 400)
             print('PASS real Identity RS256/JWKS and PRODUCT_WRITE; data only in siga_catalog_local_test')
         finally:
             process.terminate()

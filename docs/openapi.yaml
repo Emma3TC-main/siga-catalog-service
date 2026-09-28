@@ -18,7 +18,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ProductPage' }
     post:
-      summary: Create product and its conversions
+      summary: Create product, its conversions and a pending ProductCreated v1 outbox event
       requestBody:
         required: true
         content:
@@ -30,6 +30,8 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ProductResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/ReferenceNotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
   /products/{id}:
     parameters:
@@ -164,6 +166,12 @@ components:
     Conflict:
       description: Duplicate/version/domain conflict
       content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    ValidationError:
+      description: Invalid request or conversion
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    ReferenceNotFound:
+      description: Category or unit of measure does not exist
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
   schemas:
     Problem:
       type: object
@@ -173,6 +181,7 @@ components:
         code: { type: string }
         detail: { type: string }
         correlationId: { type: string, format: uuid }
+        field: { type: string }
     SupplierRequest:
       type: object
       required: [code, taxId, businessName]
@@ -243,19 +252,19 @@ components:
       properties:
         fromUnitId: { type: string, format: uuid }
         toUnitId: { type: string, format: uuid }
-        factor: { type: number, format: double, exclusiveMinimum: 0 }
+        factor: { type: number, format: double, exclusiveMinimum: 0, multipleOf: 0.000001 }
         active: { type: boolean, default: true }
     ProductRequest:
       type: object
       required: [sku, name, categoryId, productType, storageUnitId, baseUnitId]
       properties:
-        sku: { type: string }
-        name: { type: string }
+        sku: { type: string, maxLength: 80 }
+        name: { type: string, maxLength: 200 }
         categoryId: { type: string, format: uuid }
         productType: { type: string, enum: [MATERIAL, INSUMO, REPUESTO, MAQUINARIA] }
         storageUnitId: { type: string, format: uuid }
         baseUnitId: { type: string, format: uuid }
-        minStock: { type: number, minimum: 0 }
+        minStock: { type: number, minimum: 0, multipleOf: 0.000001 }
         requiresLot: { type: boolean, default: false }
         requiresHeatNumber: { type: boolean, default: false }
         requiresExpiry: { type: boolean, default: false }

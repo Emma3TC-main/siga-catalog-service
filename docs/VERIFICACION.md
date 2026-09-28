@@ -58,6 +58,21 @@ Se implementó únicamente `POST /api/v1/units`: REST → `CreateUnitOfMeasureUs
 
 El contrato de POST no define un cuerpo de respuesta, por lo que se conserva 201 vacío. `GET /units` sigue sin implementarse porque su respuesta no está definida. CUS-23 menciona PATCH y ProductUpdated para conversiones, mientras OpenAPI solo define GET/POST de units: PATCH, conversiones y eventos permanecen pendientes de contrato aprobado. No hay regla canónica de normalización de código ni de catálogo/compatibilidad de dimensiones para una unidad maestra; no se implementaron.
 
+## Incremento POST /api/v1/products — 2026-09-28
+
+`POST /api/v1/products` recorre REST → `CreateProductUseCase` → `CreateProductService` → puertos Category/UoM/Product → PostgreSQL. En una sola transacción inserta producto, conversiones y `catalog.outbox_event` `ProductCreated` v1 `PENDING`. La petición no publica RabbitMQ.
+
+| Verificación | Resultado |
+|---|---|
+| Maven verify previo | BUILD SUCCESS; 27 pruebas, 0 fallos, 0 errores, 0 omitidas |
+| Product focal posterior | 7 pruebas, 0 fallos, 0 errores: respuesta 201, SKU duplicado, referencias inexistentes/inactivas, conversión directa, precisión 18,6, flags independientes, 401/403, rollback y forma del outbox |
+| Outbox | `aggregate_type=Product`, `event_type=ProductCreated`, `schema_version=1`, `status=PENDING`, correlación UUID resuelta y payload con códigos UoM/factor |
+| Migraciones | Flyway validó V1–V3; schema catalog continúa en versión 3 |
+| HTTP con Identity real | JWKS/login/MFA 200; Product 401/201/409/400; datos solo en `siga_catalog_local_test` |
+| IAM | `pg_dump --schema-only --schema=iam` antes/después idéntico, ignorando tokens restrict/unrestrict no deterministas |
+
+Pendiente: publisher RabbitMQ con confirm/retry/DLQ y consumidor Inventory idempotente. La entrega será al menos una vez; `inventory.processed_event` deduplicará. PUT/PATCH y concurrencia de edición no se implementaron. CUS-05 formaliza que los cuatro flags de trazabilidad son independientes; no existe una combinación booleana inválida en v1.2.
+
 ### Corrección de detalles 400 de unidades
 
 Los `400 VALIDATION_ERROR` de `/api/v1/units` ahora conservan el mismo Problem Details y código, pero `detail` identifica la unidad y el campo: `code`, `name`, `symbol` o `dimension`. Los errores de categorías no cambiaron y continúan con `Revisa los campos de la categoría`.

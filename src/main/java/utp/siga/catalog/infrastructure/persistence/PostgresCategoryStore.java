@@ -21,4 +21,15 @@ public class PostgresCategoryStore implements CategoryStore {
                 (row, index) -> new CategorySummary(row.getObject("id", java.util.UUID.class), row.getString("code"),
                         row.getString("name"), Category.Type.valueOf(row.getString("category_type")), row.getBoolean("active")));
     }
+    @Override
+    @Transactional(readOnly = true)
+    public boolean isActive(java.util.UUID id) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT EXISTS (SELECT 1 FROM catalog.category WHERE id=? AND active=true)", Boolean.class, id));
+    }
+    @Override
+    @Transactional(readOnly = true)
+    public boolean exists(java.util.UUID id) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM catalog.category WHERE id=?)", Boolean.class, id));
+    }
 }
