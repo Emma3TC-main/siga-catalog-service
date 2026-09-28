@@ -73,6 +73,24 @@ El contrato de POST no define un cuerpo de respuesta, por lo que se conserva 201
 
 Pendiente: publisher RabbitMQ con confirm/retry/DLQ y consumidor Inventory idempotente. La entrega será al menos una vez; `inventory.processed_event` deduplicará. PUT/PATCH y concurrencia de edición no se implementaron. CUS-05 formaliza que los cuatro flags de trazabilidad son independientes; no existe una combinación booleana inválida en v1.2.
 
+## Incremento publisher diferido ProductCreated — 2026-09-28
+
+`POST /api/v1/products` no cambió: confirma únicamente producto, conversiones y la fila `PENDING`. `OutboxPublisherWorker`, activado solo en el arranque local normal, reclama una fila vencida con `FOR UPDATE SKIP LOCKED`, forma el sobre ProductCreated v1 desde los metadatos y `payload` JSONB, envía un mensaje persistente a `siga.events` con `catalog.product.created.v1`, espera publisher-confirm y solo entonces marca `PUBLISHED` y `published_at`.
+
+Los fallos conservan `PENDING`, incrementan `attempts` y programan backoff exponencial limitado entre 1 y 60 segundos. No se introdujo `PROCESSING`, lease ni V4: el índice parcial canónico existente cubre la consulta. Si el proceso cae después del confirm y antes del commit de PostgreSQL, el broker puede conservar el mensaje mientras la fila queda `PENDING`; al reiniciar se vuelve a publicar. Esa ventana es intencional y entrega al menos una vez, no exactamente una vez. Inventory continúa pendiente y deberá deduplicar mediante `processed_event`.
+
+| Verificación | Resultado |
+|---|---|
+| `scripts/Local.ps1 -Action Test` | BUILD SUCCESS; 32 pruebas, 0 fallos, 0 errores, 0 omitidas |
+| Publisher con RabbitMQ local | Confirm recibido; fila `PUBLISHED`, `published_at` no nulo, `attempts=0`; mensaje persistente y sobre ProductCreated v1 comprobado |
+| Concurrencia | Dos ejecuciones concurrentes reclamaron una sola fila y produjeron un solo mensaje |
+| Broker no disponible | Fila conservada `PENDING`, `attempts=1`, `next_attempt_at` futuro |
+| Recuperación | Nueva instancia del publisher reclamó la fila vencida y la llevó a `PUBLISHED` conservando `attempts=1` |
+| Base y broker | PostgreSQL 17.11 y RabbitMQ del proyecto histórico `siga-local`; filas y colas de prueba se aislaron y limpiaron en `siga_catalog_local_test` |
+| Migraciones/IAM | Flyway validó V1–V3 sin aplicar ninguna; no se escribió IAM |
+
+Pendiente: política operativa de `FAILED`/DLQ, métricas/alertas y consumidor Inventory. No se implementaron Publisher para otros eventos, Inventory, PUT/PATCH ni cambios de Identity.
+
 ### Corrección de detalles 400 de unidades
 
 Los `400 VALIDATION_ERROR` de `/api/v1/units` ahora conservan el mismo Problem Details y código, pero `detail` identifica la unidad y el campo: `code`, `name`, `symbol` o `dimension`. Los errores de categorías no cambiaron y continúan con `Revisa los campos de la categoría`.

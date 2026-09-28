@@ -26,6 +26,16 @@ function Import-Catalog([bool]$tests) {
     $env:CATALOG_DB_URL = "jdbc:postgresql://127.0.0.1:$($config.dbPort)/siga"
     $env:CATALOG_DB_USER = 'siga_catalog'
     $env:CATALOG_DB_PASSWORD = $config.password
+    $rabbit = @{}
+    foreach ($line in Get-Content (Join-Path $infra 'compose/.env.local')) {
+        if ($line -match '^LOCAL_RABBITMQ_(USER|PASSWORD)=(.+)$') { $rabbit[$Matches[1]] = $Matches[2] }
+    }
+    if (!$rabbit['USER'] -or !$rabbit['PASSWORD']) { throw 'RabbitMQ credentials are missing from the existing local Compose configuration.' }
+    $env:CATALOG_RABBIT_HOST = '127.0.0.1'
+    $env:CATALOG_RABBIT_PORT = '5672'
+    $env:CATALOG_RABBIT_USER = $rabbit['USER']
+    $env:CATALOG_RABBIT_PASSWORD = $rabbit['PASSWORD']
+    $env:CATALOG_OUTBOX_PUBLISHER_ENABLED = 'false'
     if ($tests) {
         $env:CATALOG_DB_URL = "jdbc:postgresql://127.0.0.1:$($config.dbPort)/siga_catalog_local_test"
         $env:CATALOG_DB_USER = 'siga_catalog_test'
@@ -100,6 +110,7 @@ GRANT CONNECT ON DATABASE siga_catalog_local_test TO siga_catalog_test;
         }
         'Start' {
             Import-Catalog $false
+            $env:CATALOG_OUTBOX_PUBLISHER_ENABLED = 'true'
             $pidFile = Join-Path $local 'catalog.pid'
             if (Test-Path $pidFile) {
                 $running = Get-Process -Id ([int](Get-Content $pidFile)) -ErrorAction SilentlyContinue
