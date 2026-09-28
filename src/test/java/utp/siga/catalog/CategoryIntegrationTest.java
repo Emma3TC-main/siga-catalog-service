@@ -19,6 +19,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -85,7 +86,8 @@ class CategoryIntegrationTest {
     @Test void validatesRequiredFieldsEnumAndPhysicalLimits() throws Exception {
         for(String body:List.of("{}", "{\"code\":\"X\",\"name\":\"X\",\"categoryType\":\"OTHER\"}",body("x".repeat(51))))
             mvc.perform(post("/api/v1/categories").header("Authorization","Bearer "+token("PRODUCT_WRITE")).contentType("application/json").content(body))
-                .andExpect(status().isBadRequest()).andExpect(jsonPath("code").value("VALIDATION_ERROR"));
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("detail").value("Revisa los campos de la categoría"));
     }
     @Test void deniesUnauthenticatedAndInsufficientPermissionWithoutWriting() throws Exception {
         String code=code();
@@ -100,6 +102,39 @@ class CategoryIntegrationTest {
                 token("PRODUCT_WRITE","siga-identity","siga-api",Instant.now().minusSeconds(120),key),
                 token("PRODUCT_WRITE","siga-identity","siga-api",future,new RSAKeyGenerator(2048).generate())))
             assertEquals(401,create(code,jwt));
+    }
+    @Test void listsCategoriesAsOrderedDirectArrayIncludingInactive() throws Exception {
+        String first = "A-" + UUID.randomUUID(), last = "Z-" + UUID.randomUUID();
+        created.add(first); created.add(last);
+        jdbc.update("INSERT INTO catalog.category(code,name,category_type,active) VALUES (?,?,?,?)", first, "Activa", "MATERIAL", true);
+        jdbc.update("INSERT INTO catalog.category(code,name,category_type,active) VALUES (?,?,?,?)", last, "Inactiva", "REPUESTO", false);
+        var result = mvc.perform(get("/api/v1/categories").header("Authorization", "Bearer " + token("PRODUCT_WRITE")))
+                .andExpect(status().isOk()).andExpect(content().contentTypeCompatibleWith("application/json"))
+                .andExpect(jsonPath("$").isArray()).andReturn();
+        var items = new com.fasterxml.jackson.databind.ObjectMapper().readTree(result.getResponse().getContentAsByteArray());
+        var codes = new ArrayList<String>();
+        boolean inactiveFound = false;
+        for (var item : items) {
+            var fields = new HashSet<String>();
+            item.fieldNames().forEachRemaining(fields::add);
+            assertEquals(Set.of("id", "code", "name", "categoryType", "active"), fields);
+            codes.add(item.get("code").asText());
+            if (last.equals(item.get("code").asText()) && !item.get("active").asBoolean()) inactiveFound = true;
+        }
+        assertEquals(codes.stream().sorted().toList(), codes);
+        assertEquals(true, inactiveFound);
+    }
+    @Test @org.springframework.transaction.annotation.Transactional
+    void listsEmptyCategories() throws Exception {
+        jdbc.update("DELETE FROM catalog.unit_conversion");
+        jdbc.update("DELETE FROM catalog.product");
+        jdbc.update("DELETE FROM catalog.category");
+        mvc.perform(get("/api/v1/categories").header("Authorization", "Bearer " + token("PRODUCT_WRITE")))
+                .andExpect(status().isOk()).andExpect(content().json("[]"));
+    }
+    @Test void protectsCategoryList() throws Exception {
+        mvc.perform(get("/api/v1/categories")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/categories").header("Authorization", "Bearer " + token("INVENTORY_READ"))).andExpect(status().isForbidden());
     }
     @Test void databaseOwnershipAndIsolation() {
         assertEquals("siga_catalog_test",jdbc.queryForObject("SELECT current_user",String.class));

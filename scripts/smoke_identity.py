@@ -63,11 +63,15 @@ def main():
             otp = f'{(int.from_bytes(digest[offset:offset+4], "big") & 0x7fffffff) % 1000000:06}'
             tokens = call(iam, 'POST', '/api/v1/auth/mfa/verify', {'challengeId': challenge, 'otp': otp})
             token = tokens['accessToken']
-            category = {'code': 'SMOKE-' + uuid.uuid4().hex, 'name': 'HTTP Identity smoke', 'categoryType': 'MATERIAL'}
-            call(base, 'POST', '/api/v1/categories', category, expected=401)
-            call(base, 'POST', '/api/v1/categories', category, token, 201)
-            call(base, 'POST', '/api/v1/categories', category, token, 409)
-            call(base, 'POST', '/api/v1/categories', {}, token, 400)
+            categories = call(base, 'GET', '/api/v1/categories', token=token)
+            units = call(base, 'GET', '/api/v1/units', token=token)
+            assert isinstance(categories, list) and all(categories[index]['code'] <= categories[index + 1]['code'] for index in range(len(categories) - 1))
+            assert isinstance(units, list) and all(units[index]['code'] <= units[index + 1]['code'] for index in range(len(units) - 1))
+            unit = {'code': 'SMOKE' + uuid.uuid4().hex[:12], 'name': 'HTTP Identity smoke', 'symbol': 'sm', 'dimension': 'TEST'}
+            call(base, 'POST', '/api/v1/units', unit, expected=401)
+            call(base, 'POST', '/api/v1/units', unit, token, 201)
+            call(base, 'POST', '/api/v1/units', unit, token, 409)
+            call(base, 'POST', '/api/v1/units', {}, token, 400)
             print('PASS real Identity RS256/JWKS and PRODUCT_WRITE; data only in siga_catalog_local_test')
         finally:
             process.terminate()

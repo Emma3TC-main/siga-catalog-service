@@ -23,17 +23,17 @@ Todas las PK son UUID con gen_random_uuid(). Category: code único (50), name (1
 
 ## Contratos y permisos
 
-OpenAPI: GET/POST categories y units; GET/POST products y suppliers; GET/PUT products/{id} y suppliers/{id}. CUS-04/05/23 usa PRODUCT_WRITE; CUS-31 SUPPLIER_MANAGE. No se deduce un permiso de lectura distinto. Eventos nombrados: ProductCreated, ProductUpdated (incluye conversiones), SupplierCreated/Updated/Disabled; consumidores Inventory y Reporting. No se define un evento obligatorio de alta de unidad independiente.
+OpenAPI: GET/POST categories y units; GET/POST products y suppliers; GET/PUT products/{id} y suppliers/{id}. GET categories responde arreglo directo `{id,code,name,categoryType,active}` y GET units `{id,code,name,symbol,dimension,active}`; ambos requieren PRODUCT_WRITE, incluyen activos/inactivos, ordenan `code ASC` y no admiten filtros/paginación. CUS-04/05/23 usa PRODUCT_WRITE; CUS-31 SUPPLIER_MANAGE. No se deduce un permiso de lectura distinto. Eventos nombrados: ProductCreated, ProductUpdated (incluye conversiones), SupplierCreated/Updated/Disabled; consumidores Inventory y Reporting. No se define un evento obligatorio de alta de unidad independiente.
 
 Primera slice: POST /api/v1/categories, request code/name/categoryType y respuesta 201 sin cuerpo como declara OpenAPI. No hay dependencia de producto, unidad, broker ni MinIO para esta operación. Se valida contra límites del SQL de mayor prioridad; no se inventan normalización de códigos, unicidad case-insensitive ni campos de respuesta. Errores 400/401/403/409/503 siguen el manual, aunque OpenAPI no los enumera en esta operación.
 
 ## Contradicciones y decisiones pendientes
 
 1. `especificaciones/CUS_Detallados.md` CUS-04/05/23 declara PATCH; `api/catalog-openapi.yaml` no define PATCH, define PUT solo para productos/proveedores. No implementar actualizaciones ambiguas.
-2. `api/catalog-openapi.yaml` GET categories/units no define cuerpo, paginación ni DTO de respuesta; POST tampoco define respuesta JSON. POST vacío es implementable; listados pendientes de contrato aprobado.
+2. Resuelto: GET categories/units define arreglo directo, campos, activos/inactivos y `code ASC`, sin filtros ni paginación. POST sigue con 201 vacío por contrato.
 3. CategoryRequest no declara maxLength, pero `database/physical_model.sql` y diccionario sí (50/120). Se aplican límites físicos por ADR-018. No hay minLength/no-blank: no añadir esas reglas sin aprobación.
 4. CUS-04 menciona “Product/Category metadata event selectivo” sin nombre, disparador ni payload. UML-03/ADR-007 solo concretan eventos Product/Supplier. Esta slice persiste categoría sin publicar un evento inventado; integración de categoría pendiente de definición.
-5. ProductRequest/SupplierRequest de actualización no incluyen versión esperada aunque responses/modelo incluyen version. Política de concurrencia pendiente. Dimensiones compatibles, flags contradictorios y validación tributaria parametrizable necesitan reglas concretas antes de implementarse.
+5. ProductRequest/SupplierRequest de actualización no incluyen versión esperada aunque responses/modelo incluyen version. Política de concurrencia pendiente. Product deberá validar en backend categoría/UoM activas; selectores muestran solo maestros activos. Dimensiones compatibles, flags contradictorios y validación tributaria parametrizable necesitan reglas concretas antes de implementarse.
 6. ADR-018 conserva conteo histórico 40 y adenda v1.2 agrega proveedores; Catalog sí tiene seis tablas coherentes en SQL/DER/diccionario.
 7. Identity valida además estado/sesión con su propio schema. Catalog sigue manual §7.1: JWKS público, RS256, issuer/audience/exp y claim permissions; no accede a IAM. Revocación inmediata distribuida no definida; no se copia lógica IAM.
 

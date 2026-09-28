@@ -30,7 +30,9 @@ public class SecurityConfiguration {
         converter.setJwtGrantedAuthoritiesConverter(authorities);
         http.csrf(c -> c.disable()).sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(a -> a.requestMatchers("/actuator/health", "/actuator/health/readiness", "/actuator/health/liveness").permitAll()
-                .requestMatchers(HttpMethod.POST,"/api/v1/categories").hasAuthority("PRODUCT_WRITE").anyRequest().denyAll())
+                .requestMatchers(HttpMethod.POST,"/api/v1/categories", "/api/v1/units").hasAuthority("PRODUCT_WRITE")
+                .requestMatchers(HttpMethod.GET,"/api/v1/categories", "/api/v1/units").hasAuthority("PRODUCT_WRITE")
+                .anyRequest().denyAll())
             .exceptionHandling(e -> e.authenticationEntryPoint((req,res,x) -> Problems.write(req,res,401,"AUTH_INVALID"))
                 .accessDeniedHandler((req,res,x) -> Problems.write(req,res,403,"AUTH_FORBIDDEN")))
             .oauth2ResourceServer(o -> o.jwt(j -> j.jwtAuthenticationConverter(converter))
