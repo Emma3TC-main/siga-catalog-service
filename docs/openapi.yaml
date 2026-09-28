@@ -11,6 +11,14 @@ paths:
   /products:
     get:
       summary: List/filter products
+      parameters:
+        - { in: query, name: page, schema: { type: integer, minimum: 0, default: 0 } }
+        - { in: query, name: size, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { in: query, name: sort, schema: { type: string, enum: ['sku,asc', 'sku,desc', 'name,asc', 'name,desc'], default: 'sku,asc' } }
+        - { in: query, name: q, schema: { type: string }, description: Case-insensitive literal substring of SKU or name; percent and underscore are literals. }
+        - { in: query, name: active, schema: { type: boolean }, description: Omitting includes active and inactive products. }
+        - { in: query, name: categoryId, schema: { type: string, format: uuid } }
+        - { in: query, name: productType, schema: { type: string, enum: [MATERIAL, INSUMO, REPUESTO, MAQUINARIA] } }
       responses:
         '200':
           description: Product page
@@ -44,6 +52,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ProductResponse' }
+        '404': { $ref: '#/components/responses/ProductNotFound' }
     put:
       summary: Update product, traceability and conversions
       requestBody:
@@ -171,6 +180,9 @@ components:
       content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
     ReferenceNotFound:
       description: Category or unit of measure does not exist
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    ProductNotFound:
+      description: Product does not exist
       content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
   schemas:
     Problem:

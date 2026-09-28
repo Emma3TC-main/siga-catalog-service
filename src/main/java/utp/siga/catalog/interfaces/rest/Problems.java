@@ -1,6 +1,7 @@
 package utp.siga.catalog.interfaces.rest;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.*;
+import jakarta.validation.ConstraintViolationException;
 import java.io.IOException;
 import java.util.Map;
 import java.util.HashMap;
@@ -9,9 +10,11 @@ import org.springframework.http.*;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import utp.siga.catalog.domain.model.UnitFieldValidationException;
 import utp.siga.catalog.domain.model.ProductFieldValidationException;
 import utp.siga.catalog.domain.model.ProductReferenceException;
+import utp.siga.catalog.domain.model.ProductNotFoundException;
 @RestControllerAdvice
 public class Problems {
     public static Map<String,Object> body(HttpServletRequest req, int status, String code, String detail) {
@@ -47,6 +50,18 @@ public class Problems {
                 e.missing() ? "La referencia indicada no existe" : "La referencia indicada está inactiva"));
         body.put("field",e.field());
         return ResponseEntity.status(status).contentType(MediaType.APPLICATION_PROBLEM_JSON).body(body);
+    }
+    @ExceptionHandler(ProductNotFoundException.class)
+    ResponseEntity<?> productMissing(HttpServletRequest req) {
+        return response(req,404,"PRODUCT_NOT_FOUND","El producto indicado no existe");
+    }
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    ResponseEntity<?> invalidParameter(MethodArgumentTypeMismatchException e,HttpServletRequest req) {
+        return response(req,400,"VALIDATION_ERROR",products(req) ? "Revisa el parámetro " + e.getName() + " del producto" : "Revisa los parámetros de la solicitud");
+    }
+    @ExceptionHandler(ConstraintViolationException.class)
+    ResponseEntity<?> invalidConstraint(HttpServletRequest req) {
+        return response(req,400,"VALIDATION_ERROR",products(req) ? "Revisa los parámetros del producto" : "Revisa los parámetros de la solicitud");
     }
     @ExceptionHandler(MethodArgumentNotValidException.class)
     ResponseEntity<?> invalidFields(MethodArgumentNotValidException e,HttpServletRequest req) {

@@ -32,6 +32,7 @@ public class SecurityConfiguration {
             .authorizeHttpRequests(a -> a.requestMatchers("/actuator/health", "/actuator/health/readiness", "/actuator/health/liveness").permitAll()
                 .requestMatchers(HttpMethod.POST,"/api/v1/categories", "/api/v1/units").hasAuthority("PRODUCT_WRITE")
                 .requestMatchers(HttpMethod.POST,"/api/v1/products").hasAuthority("PRODUCT_WRITE")
+                .requestMatchers(HttpMethod.GET,"/api/v1/products", "/api/v1/products/**").hasAuthority("PRODUCT_WRITE")
                 .requestMatchers(HttpMethod.GET,"/api/v1/categories", "/api/v1/units").hasAuthority("PRODUCT_WRITE")
                 .anyRequest().denyAll())
             .exceptionHandling(e -> e.authenticationEntryPoint((req,res,x) -> Problems.write(req,res,401,"AUTH_INVALID"))
