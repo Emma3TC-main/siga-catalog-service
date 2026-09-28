@@ -1,11 +1,110 @@
 package utp.siga.catalog.infrastructure.persistence;
-import java.util.*; import com.fasterxml.jackson.databind.ObjectMapper; import com.fasterxml.jackson.databind.node.ObjectNode; import org.springframework.jdbc.core.JdbcTemplate; import org.springframework.stereotype.Repository; import utp.siga.catalog.application.port.out.SupplierStore; import utp.siga.catalog.domain.model.Supplier; import utp.siga.catalog.domain.model.SupplierVersionConflictException;
-@Repository public class PostgresSupplierStore implements SupplierStore { final JdbcTemplate j; public PostgresSupplierStore(JdbcTemplate j){this.j=j;}
- public UUID create(Supplier s,UUID c){UUID id=j.queryForObject("INSERT INTO catalog.supplier(code,tax_id,business_name,trade_name,contact_name,phone,email,address,active) VALUES(?,?,?,?,?,?,?,?,true) RETURNING id",UUID.class,s.code(),s.taxId(),s.businessName(),s.tradeName(),s.contactName(),s.phone(),s.email(),s.address()); event(id,"SupplierCreated",s.code(),s.taxId(),s.businessName(),true,0,c);return id;}
- public Optional<Supplier> find(UUID id){var x=j.query("SELECT * FROM catalog.supplier WHERE id=?",(r,n)->map(r),id);return x.stream().findFirst();}
- public Page page(int p,int z,String sort,String q,Boolean a){var w=new StringBuilder(" WHERE 1=1");var v=new ArrayList<Object>(); if(q!=null&&!q.isEmpty()){w.append(" AND (code ILIKE ? ESCAPE E'\\\\' OR tax_id ILIKE ? ESCAPE E'\\\\' OR business_name ILIKE ? ESCAPE E'\\\\' OR trade_name ILIKE ? ESCAPE E'\\\\')");String x="%"+q.replace("\\","\\\\").replace("%","\\%").replace("_","\\_")+"%";for(int i=0;i<4;i++)v.add(x);}if(a!=null){w.append(" AND active=?");v.add(a);} long t=j.queryForObject("SELECT count(*) FROM catalog.supplier"+w,Long.class,v.toArray());String o=switch(sort){case "code,asc"->"code ASC,id ASC";case "code,desc"->"code DESC,id ASC";case "businessName,asc"->"business_name ASC,id ASC";case "businessName,desc"->"business_name DESC,id ASC";default->throw new IllegalArgumentException("sort");};var all=new ArrayList<>(v);all.add(z);all.add((long)p*z);return new Page(j.query("SELECT * FROM catalog.supplier"+w+" ORDER BY "+o+" LIMIT ? OFFSET ?",(r,n)->map(r),all.toArray()),t);}
- public Update update(Supplier s,long expected,UUID c){var old=find(s.id()).orElseThrow(); if(old.version()!=expected) throw new SupplierVersionConflictException(); boolean changed=!same(old,s);if(!changed)return new Update(old,false);int n=j.update("UPDATE catalog.supplier SET code=?,tax_id=?,business_name=?,trade_name=?,contact_name=?,phone=?,email=?,address=?,active=?,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND version=?",s.code(),s.taxId(),s.businessName(),s.tradeName(),s.contactName(),s.phone(),s.email(),s.address(),s.active(),s.id(),expected);if(n==0)throw new SupplierVersionConflictException();Supplier now=new Supplier(s.id(),s.code(),s.taxId(),s.businessName(),s.tradeName(),s.contactName(),s.phone(),s.email(),s.address(),s.active(),expected+1);event(s.id(),old.active()&&!s.active()?"SupplierDisabled":"SupplierUpdated",now.code(),now.taxId(),now.businessName(),now.active(),now.version(),c);return new Update(now,true);}
- private boolean same(Supplier a,Supplier b){return a.code().equals(b.code())&&a.taxId().equals(b.taxId())&&a.businessName().equals(b.businessName())&&Objects.equals(a.tradeName(),b.tradeName())&&Objects.equals(a.contactName(),b.contactName())&&Objects.equals(a.phone(),b.phone())&&Objects.equals(a.email(),b.email())&&Objects.equals(a.address(),b.address())&&a.active()==b.active();}
- private Supplier map(java.sql.ResultSet r)throws java.sql.SQLException{return new Supplier(r.getObject("id",UUID.class),r.getString("code"),r.getString("tax_id"),r.getString("business_name"),r.getString("trade_name"),r.getString("contact_name"),r.getString("phone"),r.getString("email"),r.getString("address"),r.getBoolean("active"),r.getLong("version"));}
- private void event(UUID id,String type,String code,String tax,String name,boolean active,long version,UUID c){ObjectNode p=new ObjectMapper().createObjectNode(),s=p.putObject("supplier");s.put("id",id.toString());s.put("code",code);s.put("taxId",tax);s.put("businessName",name);s.put("active",active);s.put("version",version);j.update("INSERT INTO catalog.outbox_event(aggregate_type,aggregate_id,event_type,schema_version,correlation_id,payload) VALUES('Supplier',?,?,1,?,?::jsonb)",id,type,c,p.toString());}
+
+import java.util.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Repository;
+import utp.siga.catalog.application.port.out.SupplierStore;
+import utp.siga.catalog.domain.model.Supplier;
+import utp.siga.catalog.domain.model.SupplierVersionConflictException;
+
+@Repository
+public class PostgresSupplierStore implements SupplierStore {
+    final JdbcTemplate j;
+
+    public PostgresSupplierStore(JdbcTemplate j) {
+        this.j = j;
+    }
+
+    public UUID create(Supplier s, UUID c) {
+        UUID id = j.queryForObject(
+                "INSERT INTO catalog.supplier(code,tax_id,business_name,trade_name,contact_name,phone,email,address,active) VALUES(?,?,?,?,?,?,?,?,true) RETURNING id",
+                UUID.class, s.code(), s.taxId(), s.businessName(), s.tradeName(), s.contactName(), s.phone(), s.email(),
+                s.address());
+        event(id, "SupplierCreated", s.code(), s.taxId(), s.businessName(), true, 0, c);
+        return id;
+    }
+
+    public Optional<Supplier> find(UUID id) {
+        var x = j.query("SELECT * FROM catalog.supplier WHERE id=?", (r, n) -> map(r), id);
+        return x.stream().findFirst();
+    }
+
+    public Page page(int p, int z, String sort, String q, Boolean a) {
+        var w = new StringBuilder(" WHERE 1=1");
+        var v = new ArrayList<Object>();
+        if (q != null && !q.isEmpty()) {
+            w.append(
+                    " AND (code ILIKE ? ESCAPE E'\\\\' OR tax_id ILIKE ? ESCAPE E'\\\\' OR business_name ILIKE ? ESCAPE E'\\\\' OR trade_name ILIKE ? ESCAPE E'\\\\')");
+            String x = "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
+            for (int i = 0; i < 4; i++)
+                v.add(x);
+        }
+        if (a != null) {
+            w.append(" AND active=?");
+            v.add(a);
+        }
+        long t = j.queryForObject("SELECT count(*) FROM catalog.supplier" + w, Long.class, v.toArray());
+        String o = switch (sort) {
+            case "code,asc" -> "code ASC,id ASC";
+            case "code,desc" -> "code DESC,id ASC";
+            case "businessName,asc" -> "business_name ASC,id ASC";
+            case "businessName,desc" -> "business_name DESC,id ASC";
+            default -> throw new IllegalArgumentException("sort");
+        };
+        var all = new ArrayList<>(v);
+        all.add(z);
+        all.add((long) p * z);
+        return new Page(j.query("SELECT * FROM catalog.supplier" + w + " ORDER BY " + o + " LIMIT ? OFFSET ?",
+                (r, n) -> map(r), all.toArray()), t);
+    }
+
+    public Update update(Supplier s, long expected, UUID c) {
+        var old = find(s.id()).orElseThrow();
+        if (old.version() != expected)
+            throw new SupplierVersionConflictException();
+        boolean changed = !same(old, s);
+        if (!changed)
+            return new Update(old, false);
+        int n = j.update(
+                "UPDATE catalog.supplier SET code=?,tax_id=?,business_name=?,trade_name=?,contact_name=?,phone=?,email=?,address=?,active=?,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND version=?",
+                s.code(), s.taxId(), s.businessName(), s.tradeName(), s.contactName(), s.phone(), s.email(),
+                s.address(), s.active(), s.id(), expected);
+        if (n == 0)
+            throw new SupplierVersionConflictException();
+        Supplier now = new Supplier(s.id(), s.code(), s.taxId(), s.businessName(), s.tradeName(), s.contactName(),
+                s.phone(), s.email(), s.address(), s.active(), expected + 1);
+        event(s.id(), old.active() && !s.active() ? "SupplierDisabled" : "SupplierUpdated", now.code(), now.taxId(),
+                now.businessName(), now.active(), now.version(), c);
+        return new Update(now, true);
+    }
+
+    private boolean same(Supplier a, Supplier b) {
+        return a.code().equals(b.code()) && a.taxId().equals(b.taxId()) && a.businessName().equals(b.businessName())
+                && Objects.equals(a.tradeName(), b.tradeName()) && Objects.equals(a.contactName(), b.contactName())
+                && Objects.equals(a.phone(), b.phone()) && Objects.equals(a.email(), b.email())
+                && Objects.equals(a.address(), b.address()) && a.active() == b.active();
+    }
+
+    private Supplier map(java.sql.ResultSet r) throws java.sql.SQLException {
+        return new Supplier(r.getObject("id", UUID.class), r.getString("code"), r.getString("tax_id"),
+                r.getString("business_name"), r.getString("trade_name"), r.getString("contact_name"),
+                r.getString("phone"), r.getString("email"), r.getString("address"), r.getBoolean("active"),
+                r.getLong("version"));
+    }
+
+    private void event(UUID id, String type, String code, String tax, String name, boolean active, long version,
+            UUID c) {
+        ObjectNode p = new ObjectMapper().createObjectNode(), s = p.putObject("supplier");
+        s.put("id", id.toString());
+        s.put("code", code);
+        s.put("taxId", tax);
+        s.put("businessName", name);
+        s.put("active", active);
+        s.put("version", version);
+        j.update(
+                "INSERT INTO catalog.outbox_event(aggregate_type,aggregate_id,event_type,schema_version,correlation_id,payload) VALUES('Supplier',?,?,1,?,?::jsonb)",
+                id, type, c, p.toString());
+    }
 }
