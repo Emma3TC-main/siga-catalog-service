@@ -1,0 +1,33 @@
+server:
+  address: 127.0.0.1
+  port: ${CATALOG_PORT:8082}
+spring:
+  application:
+    name: siga-catalog-service
+  datasource:
+    url: ${CATALOG_DB_URL}
+    username: ${CATALOG_DB_USER}
+    password: ${CATALOG_DB_PASSWORD}
+  flyway:
+    schemas: catalog
+    default-schema: catalog
+    create-schemas: false
+    clean-disabled: true
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,db
+catalog:
+  security:
+    jwks-uri: ${CATALOG_JWKS_URI:http://127.0.0.1:8081/.well-known/jwks.json}
+    issuer: ${CATALOG_JWT_ISSUER:siga-identity}
+    audience: ${CATALOG_JWT_AUDIENCE:siga-api}
