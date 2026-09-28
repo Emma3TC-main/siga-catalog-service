@@ -15,6 +15,9 @@ import utp.siga.catalog.domain.model.UnitFieldValidationException;
 import utp.siga.catalog.domain.model.ProductFieldValidationException;
 import utp.siga.catalog.domain.model.ProductReferenceException;
 import utp.siga.catalog.domain.model.ProductNotFoundException;
+import utp.siga.catalog.domain.model.SupplierNotFoundException;
+import utp.siga.catalog.domain.model.SupplierFieldValidationException;
+import utp.siga.catalog.domain.model.SupplierVersionConflictException;
 @RestControllerAdvice
 public class Problems {
     public static Map<String,Object> body(HttpServletRequest req, int status, String code, String detail) {
@@ -55,6 +58,9 @@ public class Problems {
     ResponseEntity<?> productMissing(HttpServletRequest req) {
         return response(req,404,"PRODUCT_NOT_FOUND","El producto indicado no existe");
     }
+    @ExceptionHandler(SupplierNotFoundException.class) ResponseEntity<?> supplierMissing(HttpServletRequest req) { return response(req,404,"SUPPLIER_NOT_FOUND","El proveedor indicado no existe"); }
+    @ExceptionHandler(SupplierFieldValidationException.class) ResponseEntity<?> supplierInvalid(SupplierFieldValidationException e,HttpServletRequest req) { return response(req,400,"VALIDATION_ERROR","Revisa el campo "+e.field()+" del proveedor"); }
+    @ExceptionHandler(SupplierVersionConflictException.class) ResponseEntity<?> supplierConflict(HttpServletRequest req) { return response(req,409,"VERSION_CONFLICT","La versión del proveedor no coincide"); }
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     ResponseEntity<?> invalidParameter(MethodArgumentTypeMismatchException e,HttpServletRequest req) {
         return response(req,400,"VALIDATION_ERROR",products(req) ? "Revisa el parámetro " + e.getName() + " del producto" : "Revisa los parámetros de la solicitud");

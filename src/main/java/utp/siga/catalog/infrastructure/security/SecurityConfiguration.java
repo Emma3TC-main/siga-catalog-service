@@ -34,6 +34,7 @@ public class SecurityConfiguration {
                 .requestMatchers(HttpMethod.POST,"/api/v1/products").hasAuthority("PRODUCT_WRITE")
                 .requestMatchers(HttpMethod.GET,"/api/v1/products", "/api/v1/products/**").hasAuthority("PRODUCT_WRITE")
                 .requestMatchers(HttpMethod.GET,"/api/v1/categories", "/api/v1/units").hasAuthority("PRODUCT_WRITE")
+                .requestMatchers("/api/v1/suppliers", "/api/v1/suppliers/**").hasAuthority("SUPPLIER_MANAGE")
                 .anyRequest().denyAll())
             .exceptionHandling(e -> e.authenticationEntryPoint((req,res,x) -> Problems.write(req,res,401,"AUTH_INVALID"))
                 .accessDeniedHandler((req,res,x) -> Problems.write(req,res,403,"AUTH_FORBIDDEN")))

@@ -42,7 +42,7 @@ public class OutboxPublisher {
                 Message message = MessageBuilder.withBody(body.getBytes(StandardCharsets.UTF_8))
                         .setContentType("application/json").setMessageId(event.id().toString())
                         .setDeliveryMode(MessageDeliveryMode.PERSISTENT).build();
-                rabbit.send(exchange, routingKey, message, correlation);
+                rabbit.send(exchange, routing(event), message, correlation);
                 CorrelationData.Confirm confirm = correlation.getFuture().get(confirmTimeout, TimeUnit.MILLISECONDS);
                 if (confirm == null || !confirm.isAck()) throw new IllegalStateException("RabbitMQ did not confirm the event");
                 events.markPublished(event);
@@ -59,4 +59,5 @@ public class OutboxPublisher {
         long factor = 1L << Math.min(event.attempts() + 1, 20);
         return Math.min(retryMax, retryBase > retryMax / factor ? retryMax : retryBase * factor);
     }
+    private String routing(OutboxEvent event) { return switch(event.eventType()) { case "ProductCreated" -> routingKey; case "SupplierCreated" -> "catalog.supplier.created.v1"; case "SupplierUpdated" -> "catalog.supplier.updated.v1"; case "SupplierDisabled" -> "catalog.supplier.disabled.v1"; default -> throw new IllegalArgumentException("Unsupported event"); }; }
 }

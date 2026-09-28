@@ -71,31 +71,36 @@ paths:
     get:
       summary: List/filter suppliers
       parameters:
-        - in: query
-          name: active
-          schema: { type: boolean }
-        - in: query
-          name: q
-          schema: { type: string }
+        - { in: query, name: page, schema: { type: integer, minimum: 0, default: 0 } }
+        - { in: query, name: size, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { in: query, name: sort, schema: { type: string, enum: ['code,asc', 'code,desc', 'businessName,asc', 'businessName,desc'], default: 'code,asc' } }
+        - { in: query, name: active, schema: { type: boolean }, description: Omitting includes active and inactive suppliers. }
+        - { in: query, name: q, schema: { type: string }, description: Case-insensitive literal substring of code, taxId, businessName or tradeName; percent and underscore are literals. }
       responses:
         '200':
           description: Supplier page
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SupplierPage' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
     post:
       summary: Create supplier
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/SupplierRequest' }
+            schema: { $ref: '#/components/schemas/SupplierCreateRequest' }
       responses:
         '201':
           description: Supplier created
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SupplierResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
   /suppliers/{id}:
     parameters:
@@ -108,19 +113,27 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SupplierResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/SupplierNotFound' }
     put:
       summary: Update or deactivate supplier without deleting history
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/SupplierRequest' }
+            schema: { $ref: '#/components/schemas/SupplierUpdateRequest' }
       responses:
         '200':
           description: Supplier updated
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SupplierResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/SupplierNotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
   /categories:
     get:
@@ -172,6 +185,12 @@ components:
       required: true
       schema: { type: string, format: uuid }
   responses:
+    Unauthorized:
+      description: Missing or invalid authentication
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    Forbidden:
+      description: SUPPLIER_MANAGE permission required
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
     Conflict:
       description: Duplicate/version/domain conflict
       content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
@@ -184,6 +203,9 @@ components:
     ProductNotFound:
       description: Product does not exist
       content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    SupplierNotFound:
+      description: Supplier does not exist
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
   schemas:
     Problem:
       type: object
@@ -194,7 +216,7 @@ components:
         detail: { type: string }
         correlationId: { type: string, format: uuid }
         field: { type: string }
-    SupplierRequest:
+    SupplierFields:
       type: object
       required: [code, taxId, businessName]
       properties:
@@ -206,14 +228,28 @@ components:
         phone: { type: string, maxLength: 40 }
         email: { type: string, format: email, maxLength: 254 }
         address: { type: string, maxLength: 300 }
-        active: { type: boolean, default: true }
+    SupplierCreateRequest:
+      allOf:
+        - $ref: '#/components/schemas/SupplierFields'
+        - type: object
+          properties:
+            active: { type: boolean, default: true, description: Must be omitted or true. }
+    SupplierUpdateRequest:
+      allOf:
+        - $ref: '#/components/schemas/SupplierFields'
+        - type: object
+          required: [active, expectedVersion]
+          properties:
+            active: { type: boolean }
+            expectedVersion: { type: integer, format: int64, minimum: 0 }
     SupplierResponse:
       allOf:
-        - $ref: '#/components/schemas/SupplierRequest'
+        - $ref: '#/components/schemas/SupplierFields'
         - type: object
-          required: [id, version]
+          required: [id, active, version]
           properties:
             id: { type: string, format: uuid }
+            active: { type: boolean }
             version: { type: integer, format: int64 }
     SupplierPage:
       type: object

@@ -14,9 +14,8 @@ public class ProductCreatedEnvelopeFactory {
     public ProductCreatedEnvelopeFactory(ObjectMapper json) { this.json = json; }
 
     public String create(OutboxEvent event) {
-        if (!"ProductCreated".equals(event.eventType()) || !"Product".equals(event.aggregateType())
-                || event.schemaVersion() != 1 || event.correlationId() == null || !validPayload(event.payload()))
-            throw new IllegalArgumentException("Outbox event does not conform to ProductCreated v1");
+        if (event.schemaVersion() != 1 || event.correlationId() == null || !(validProduct(event) || validSupplier(event)))
+            throw new IllegalArgumentException("Outbox event does not conform to a supported v1 event");
         ObjectNode root = json.createObjectNode();
         root.put("eventId", event.id().toString());
         root.put("eventType", event.eventType());
@@ -31,6 +30,8 @@ public class ProductCreatedEnvelopeFactory {
         return root.toString();
     }
 
+    private boolean validProduct(OutboxEvent e) { return "ProductCreated".equals(e.eventType()) && "Product".equals(e.aggregateType()) && validPayload(e.payload()); }
+    private boolean validSupplier(OutboxEvent e) { if (!Set.of("SupplierCreated","SupplierUpdated","SupplierDisabled").contains(e.eventType()) || !"Supplier".equals(e.aggregateType())) return false; JsonNode s=e.payload().path("supplier"); return e.payload().isObject()&&uuid(s.path("id"))&&text(s.path("code"),50)&&text(s.path("taxId"),20)&&text(s.path("businessName"),200)&&s.path("active").isBoolean()&&s.path("version").canConvertToLong()&&s.path("version").asLong()>=0&&(!"SupplierDisabled".equals(e.eventType())||!s.path("active").asBoolean()); }
     private boolean validPayload(JsonNode payload) {
         if (!payload.isObject() || !payload.path("conversions").isArray()) return false;
         JsonNode p = payload.path("product");
