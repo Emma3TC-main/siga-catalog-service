@@ -1,5 +1,6 @@
 package utp.siga.catalog.application.port.out;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import utp.siga.catalog.domain.model.Category;
 import utp.siga.catalog.domain.model.CategorySummary;
@@ -8,4 +9,5 @@ public interface CategoryStore {
     List<CategorySummary> findAllOrderByCode();
     boolean isActive(UUID id);
     boolean exists(UUID id);
+    Optional<CategorySummary> findById(UUID id);
 }

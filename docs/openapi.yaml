@@ -31,7 +31,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/ProductRequest' }
+            schema: { $ref: '#/components/schemas/ProductCreateRequest' }
       responses:
         '201':
           description: Product created
@@ -54,18 +54,28 @@ paths:
               schema: { $ref: '#/components/schemas/ProductResponse' }
         '404': { $ref: '#/components/responses/ProductNotFound' }
     put:
-      summary: Update product, traceability and conversions
+      summary: Fully replace product, traceability and conversions using optimistic concurrency
+      description: >-
+        Full replacement. Every editable field, active and expectedVersion is required; an omitted field is a
+        validation error and never means preserve the previous value. expectedVersion is checked before no-op
+        detection. A valid no-op returns the current representation without changing versions, timestamps,
+        conversions or outbox. An effective change creates one pending ProductUpdated v1 outbox event in the
+        same transaction.
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/ProductRequest' }
+            schema: { $ref: '#/components/schemas/ProductUpdateRequest' }
       responses:
         '200':
           description: Product updated
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ProductResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/ProductOrReferenceNotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
   /suppliers:
     get:
@@ -189,7 +199,7 @@ components:
       description: Missing or invalid authentication
       content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
     Forbidden:
-      description: SUPPLIER_MANAGE permission required
+      description: Required resource permission is missing
       content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
     Conflict:
       description: Duplicate/version/domain conflict
@@ -202,6 +212,9 @@ components:
       content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
     ProductNotFound:
       description: Product does not exist
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    ProductOrReferenceNotFound:
+      description: Product, category or unit of measure does not exist
       content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
     SupplierNotFound:
       description: Supplier does not exist
@@ -302,9 +315,8 @@ components:
         toUnitId: { type: string, format: uuid }
         factor: { type: number, format: double, exclusiveMinimum: 0, multipleOf: 0.000001 }
         active: { type: boolean, default: true }
-    ProductRequest:
+    ProductFields:
       type: object
-      required: [sku, name, categoryId, productType, storageUnitId, baseUnitId]
       properties:
         sku: { type: string, maxLength: 80 }
         name: { type: string, maxLength: 200 }
@@ -321,11 +333,37 @@ components:
         conversions:
           type: array
           items: { $ref: '#/components/schemas/UnitConversionRequest' }
+    ProductCreateRequest:
+      allOf:
+        - $ref: '#/components/schemas/ProductFields'
+        - type: object
+          required: [sku, name, categoryId, productType, storageUnitId, baseUnitId]
+    UnitConversionUpdateRequest:
+      allOf:
+        - $ref: '#/components/schemas/UnitConversionRequest'
+        - type: object
+          required: [active]
+    ProductUpdateRequest:
+      allOf:
+        - $ref: '#/components/schemas/ProductFields'
+        - type: object
+          required: [sku, name, categoryId, productType, storageUnitId, baseUnitId, minStock, requiresLot, requiresHeatNumber, requiresExpiry, requiresSerial, technicalAttributes, conversions, active, expectedVersion]
+          properties:
+            conversions:
+              type: array
+              description: Complete replacement set; omission is invalid and an empty array is explicit.
+              items: { $ref: '#/components/schemas/UnitConversionUpdateRequest' }
+            active: { type: boolean }
+            expectedVersion:
+              type: integer
+              format: int64
+              minimum: 0
+              description: Checked before no-op detection; a stale value always produces 409 VERSION_CONFLICT.
     ProductResponse:
       allOf:
-        - $ref: '#/components/schemas/ProductRequest'
+        - $ref: '#/components/schemas/ProductFields'
         - type: object
-          required: [id, active, version]
+          required: [id, sku, name, categoryId, productType, storageUnitId, baseUnitId, minStock, requiresLot, requiresHeatNumber, requiresExpiry, requiresSerial, technicalAttributes, conversions, active, version]
           properties:
             id: { type: string, format: uuid }
             active: { type: boolean }

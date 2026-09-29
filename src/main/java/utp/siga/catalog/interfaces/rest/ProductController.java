@@ -17,6 +17,8 @@ import utp.siga.catalog.application.port.in.CreateProductCommand;
 import utp.siga.catalog.application.port.in.CreateProductUseCase;
 import utp.siga.catalog.application.port.in.ListProductsUseCase;
 import utp.siga.catalog.application.port.in.GetProductUseCase;
+import utp.siga.catalog.application.port.in.UpdateProductCommand;
+import utp.siga.catalog.application.port.in.UpdateProductUseCase;
 import utp.siga.catalog.domain.model.Product;
 
 @RestController
@@ -26,9 +28,14 @@ public class ProductController {
     private final CreateProductUseCase createProduct;
     private final ListProductsUseCase listProducts;
     private final GetProductUseCase getProduct;
+    private final UpdateProductUseCase updateProduct;
 
-    public ProductController(CreateProductUseCase createProduct, ListProductsUseCase listProducts, GetProductUseCase getProduct) {
-        this.createProduct = createProduct; this.listProducts = listProducts; this.getProduct = getProduct;
+    public ProductController(CreateProductUseCase createProduct, ListProductsUseCase listProducts,
+            GetProductUseCase getProduct, UpdateProductUseCase updateProduct) {
+        this.createProduct = createProduct;
+        this.listProducts = listProducts;
+        this.getProduct = getProduct;
+        this.updateProduct = updateProduct;
     }
 
     public record ConversionRequest(@NotNull UUID fromUnitId, @NotNull UUID toUnitId, @NotNull BigDecimal factor,
@@ -45,6 +52,27 @@ public class ProductController {
                     conversions == null ? null
                             : conversions.stream().map(value -> new CreateProductCommand.Conversion(
                                     value.fromUnitId(), value.toUnitId(), value.factor(), value.active())).toList(),
+                    correlationId);
+        }
+    }
+
+    public record UpdateConversionRequest(@NotNull UUID fromUnitId, @NotNull UUID toUnitId,
+            @NotNull BigDecimal factor, @NotNull Boolean active) {
+        UpdateProductCommand.Conversion command() {
+            return new UpdateProductCommand.Conversion(fromUnitId, toUnitId, factor, active);
+        }
+    }
+
+    public record UpdateRequest(@NotNull String sku, @NotNull String name, @NotNull UUID categoryId,
+            @NotNull Product.Type productType, @NotNull UUID storageUnitId, @NotNull UUID baseUnitId,
+            @NotNull BigDecimal minStock, @NotNull Boolean requiresLot, @NotNull Boolean requiresHeatNumber,
+            @NotNull Boolean requiresExpiry, @NotNull Boolean requiresSerial, @NotNull JsonNode technicalAttributes,
+            @NotNull List<@Valid UpdateConversionRequest> conversions, @NotNull Boolean active,
+            @NotNull Long expectedVersion) {
+        UpdateProductCommand command(UUID correlationId) {
+            return new UpdateProductCommand(sku, name, categoryId, productType, storageUnitId, baseUnitId,
+                    minStock, requiresLot, requiresHeatNumber, requiresExpiry, requiresSerial, technicalAttributes,
+                    conversions.stream().map(UpdateConversionRequest::command).toList(), active, expectedVersion,
                     correlationId);
         }
     }
@@ -76,6 +104,12 @@ public class ProductController {
         var created = createProduct.create(request.command(correlationId));
         var body = response(new utp.siga.catalog.domain.model.ProductDetails(created.id(),created.product(),created.active(),created.version()));
         return ResponseEntity.status(201).body(body);
+    }
+    @PutMapping("/{id}")
+    public Response update(@PathVariable UUID id, @Valid @RequestBody UpdateRequest request,
+            HttpServletRequest servletRequest) {
+        UUID correlationId = UUID.fromString((String) servletRequest.getAttribute("correlationId"));
+        return response(updateProduct.update(id, request.command(correlationId)));
     }
     private Response response(utp.siga.catalog.domain.model.ProductDetails value) { var product=value.product(); return new Response(value.id(),product.sku(),product.name(),product.categoryId(),product.productType(),product.storageUnitId(),product.baseUnitId(),product.minStock(),product.requiresLot(),product.requiresHeatNumber(),product.requiresExpiry(),product.requiresSerial(),product.technicalAttributes(),product.conversions().stream().map(x -> new ConversionResponse(x.fromUnitId(),x.toUnitId(),x.factor(),x.active())).toList(),value.active(),value.version()); }
     private ListProductsUseCase.Sort sort(String value) { return switch(value) { case "sku,asc" -> ListProductsUseCase.Sort.SKU_ASC; case "sku,desc" -> ListProductsUseCase.Sort.SKU_DESC; case "name,asc" -> ListProductsUseCase.Sort.NAME_ASC; case "name,desc" -> ListProductsUseCase.Sort.NAME_DESC; default -> throw new IllegalArgumentException("sort"); }; }

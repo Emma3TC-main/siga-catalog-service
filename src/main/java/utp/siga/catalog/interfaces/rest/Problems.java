@@ -15,6 +15,7 @@ import utp.siga.catalog.domain.model.UnitFieldValidationException;
 import utp.siga.catalog.domain.model.ProductFieldValidationException;
 import utp.siga.catalog.domain.model.ProductReferenceException;
 import utp.siga.catalog.domain.model.ProductNotFoundException;
+import utp.siga.catalog.domain.model.ProductVersionConflictException;
 import utp.siga.catalog.domain.model.SupplierNotFoundException;
 import utp.siga.catalog.domain.model.SupplierFieldValidationException;
 import utp.siga.catalog.domain.model.SupplierVersionConflictException;
@@ -34,7 +35,7 @@ public class Problems {
         return ResponseEntity.status(status).contentType(MediaType.APPLICATION_PROBLEM_JSON).body(body(req,status,code,detail));
     }
     private boolean units(HttpServletRequest req) { return "/api/v1/units".equals(req.getRequestURI()); }
-    private boolean products(HttpServletRequest req) { return "/api/v1/products".equals(req.getRequestURI()); }
+    private boolean products(HttpServletRequest req) { return req.getRequestURI().startsWith("/api/v1/products"); }
     private String unitField(String field) { return "Revisa el campo " + field + " de la unidad"; }
     @ExceptionHandler(UnitFieldValidationException.class)
     ResponseEntity<?> invalidUnit(UnitFieldValidationException e,HttpServletRequest req) {
@@ -57,6 +58,10 @@ public class Problems {
     @ExceptionHandler(ProductNotFoundException.class)
     ResponseEntity<?> productMissing(HttpServletRequest req) {
         return response(req,404,"PRODUCT_NOT_FOUND","El producto indicado no existe");
+    }
+    @ExceptionHandler(ProductVersionConflictException.class)
+    ResponseEntity<?> productConflict(HttpServletRequest req) {
+        return response(req,409,"VERSION_CONFLICT","La versión del producto no coincide");
     }
     @ExceptionHandler(SupplierNotFoundException.class) ResponseEntity<?> supplierMissing(HttpServletRequest req) { return response(req,404,"SUPPLIER_NOT_FOUND","El proveedor indicado no existe"); }
     @ExceptionHandler(SupplierFieldValidationException.class) ResponseEntity<?> supplierInvalid(SupplierFieldValidationException e,HttpServletRequest req) { return response(req,400,"VALIDATION_ERROR","Revisa el campo "+e.field()+" del proveedor"); }
