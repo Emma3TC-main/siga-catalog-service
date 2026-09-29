@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.*;
 import utp.siga.catalog.domain.model.UnitFieldValidationException;
 import utp.siga.catalog.domain.model.ProductFieldValidationException;
 import utp.siga.catalog.domain.model.ProductReferenceException;
+import utp.siga.catalog.domain.model.ProductNotFoundException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 @RestControllerAdvice
 public class Problems {
     public static Map<String,Object> body(HttpServletRequest req, int status, String code, String detail) {
@@ -28,8 +30,22 @@ public class Problems {
         return ResponseEntity.status(status).contentType(MediaType.APPLICATION_PROBLEM_JSON).body(body(req,status,code,detail));
     }
     private boolean units(HttpServletRequest req) { return "/api/v1/units".equals(req.getRequestURI()); }
-    private boolean products(HttpServletRequest req) { return "/api/v1/products".equals(req.getRequestURI()); }
+    private boolean products(HttpServletRequest req) {
+        return "/api/v1/products".equals(req.getRequestURI()) || req.getRequestURI().startsWith("/api/v1/products/");
+    }
     private String unitField(String field) { return "Revisa el campo " + field + " de la unidad"; }
+    @ExceptionHandler(ProductNotFoundException.class)
+    ResponseEntity<?> missingProduct(HttpServletRequest req) {
+        return response(req,404,"PRODUCT_NOT_FOUND","El producto indicado no existe");
+    }
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    ResponseEntity<?> invalidParameter(HttpServletRequest req) {
+        return response(req,400,"VALIDATION_ERROR","Revisa el formato del identificador");
+    }
+    @ExceptionHandler(CannotAcquireLockException.class)
+    ResponseEntity<?> concurrentUpdate(HttpServletRequest req) {
+        return response(req,409,"DATA_CONFLICT","Conflicto de actualización; vuelve a consultar el producto");
+    }
     @ExceptionHandler(UnitFieldValidationException.class)
     ResponseEntity<?> invalidUnit(UnitFieldValidationException e,HttpServletRequest req) {
         return response(req,400,"VALIDATION_ERROR",unitField(e.field()));
