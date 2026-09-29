@@ -1,5 +1,9 @@
 # Revisión previa — 2026-09-27
 
+Nota posterior (2026-09-29): este documento conserva la revisión histórica.
+Para el alcance actual de GET/PUT de productos y las limitaciones de paginación
+y concurrencia, ver [PRODUCTOS.md](PRODUCTOS.md).
+
 Fuente: `../../siga-documentation/SIGA_Documentacion_Tecnica_Final_v1.2/` (rutas siguientes relativas a esa raíz). No se usan `diagramas_render` ni `out`.
 
 ## Estado encontrado
