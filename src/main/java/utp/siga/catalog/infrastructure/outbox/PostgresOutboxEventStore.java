@@ -16,11 +16,11 @@ public class PostgresOutboxEventStore {
 
     public PostgresOutboxEventStore(JdbcTemplate jdbc, ObjectMapper json) { this.jdbc = jdbc; this.json = json; }
 
-    public Optional<OutboxEvent> claimDueProductCreated() {
+    public Optional<OutboxEvent> claimNextDueEvent() {
         return jdbc.query("""
                 SELECT id, aggregate_type, aggregate_id, event_type, schema_version, correlation_id, causation_id, payload, occurred_at, attempts
                 FROM catalog.outbox_event
-                WHERE status = 'PENDING' AND event_type IN ('ProductCreated','SupplierCreated','SupplierUpdated','SupplierDisabled')
+                WHERE status = 'PENDING' AND event_type IN ('ProductCreated','ProductUpdated','SupplierCreated','SupplierUpdated','SupplierDisabled')
                   AND (next_attempt_at IS NULL OR next_attempt_at <= CURRENT_TIMESTAMP)
                 ORDER BY occurred_at, id FOR UPDATE SKIP LOCKED LIMIT 1
                 """, rs -> rs.next() ? Optional.of(new OutboxEvent(

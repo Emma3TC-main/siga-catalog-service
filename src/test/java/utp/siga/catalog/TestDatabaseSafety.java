@@ -1,14 +1,21 @@
 package utp.siga.catalog;
+import java.util.regex.Pattern;
 import org.springframework.context.*;
 import org.springframework.core.env.Environment;
 public class TestDatabaseSafety implements ApplicationContextInitializer<ConfigurableApplicationContext> {
+    private static final Pattern SAFE_DATABASE = Pattern.compile("siga_catalog_[a-z0-9_]+_test");
+    private static final Pattern SAFE_USER = Pattern.compile("siga_catalog_(?:test|[a-z0-9_]+_test)");
     public void initialize(ConfigurableApplicationContext context) {
         context.addBeanFactoryPostProcessor(factory -> validate(context.getEnvironment()));
     }
     static void validate(Environment env) {
+        String expectedDatabase = env.getProperty("catalog.test.expected-database", "siga_catalog_local_test");
+        String expectedUser = env.getProperty("catalog.test.expected-user", "siga_catalog_test");
         String url = env.getProperty("spring.datasource.url", "");
-        if (!url.matches("jdbc:postgresql://127\\.0\\.0\\.1:[0-9]+/siga_catalog_local_test")
-                || !"siga_catalog_test".equals(env.getProperty("spring.datasource.username")))
+        if (!SAFE_DATABASE.matcher(expectedDatabase).matches()
+                || !SAFE_USER.matcher(expectedUser).matches()
+                || !url.matches("jdbc:postgresql://127\\.0\\.0\\.1:[0-9]+/" + Pattern.quote(expectedDatabase))
+                || !expectedUser.equals(env.getProperty("spring.datasource.username")))
             throw new IllegalStateException("TEST_DATABASE_GUARD: dedicated Catalog test database/login required");
         for (String key : new String[]{"spring.flyway.url","spring.flyway.user","spring.flyway.password",
                 "spring.datasource.jndi-name","spring.datasource.hikari.jdbc-url","spring.datasource.hikari.username",

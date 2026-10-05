@@ -30,13 +30,22 @@ public class ProductCreatedEnvelopeFactory {
         return root.toString();
     }
 
-    private boolean validProduct(OutboxEvent e) { return "ProductCreated".equals(e.eventType()) && "Product".equals(e.aggregateType()) && validPayload(e.payload()); }
+    private boolean validProduct(OutboxEvent e) {
+        if ("ProductCreated".equals(e.eventType())) return "Product".equals(e.aggregateType()) && validPayload(e.payload(), false);
+        if ("ProductUpdated".equals(e.eventType())) return "Product".equals(e.aggregateType()) && validPayload(e.payload(), true);
+        return false;
+    }
     private boolean validSupplier(OutboxEvent e) { if (!Set.of("SupplierCreated","SupplierUpdated","SupplierDisabled").contains(e.eventType()) || !"Supplier".equals(e.aggregateType())) return false; JsonNode s=e.payload().path("supplier"); return e.payload().isObject()&&uuid(s.path("id"))&&text(s.path("code"),50)&&text(s.path("taxId"),20)&&text(s.path("businessName"),200)&&s.path("active").isBoolean()&&s.path("version").canConvertToLong()&&s.path("version").asLong()>=0&&(!"SupplierDisabled".equals(e.eventType())||!s.path("active").asBoolean()); }
-    private boolean validPayload(JsonNode payload) {
+    private boolean validPayload(JsonNode payload, boolean isUpdate) {
         if (!payload.isObject() || !payload.path("conversions").isArray()) return false;
         JsonNode p = payload.path("product");
         String[] required = {"id", "sku", "productType", "storageUnitCode", "baseUnitCode", "minStock", "requiresLot", "requiresHeatNumber", "requiresExpiry", "requiresSerial", "active", "version"};
         for (String field : required) if (p.path(field).isMissingNode() || p.path(field).isNull()) return false;
+        if (isUpdate) {
+            String[] updateRequired = {"name", "categoryId", "categoryCode", "categoryName"};
+            for (String field : updateRequired) if (p.path(field).isMissingNode() || p.path(field).isNull()) return false;
+            if (!uuid(p.path("categoryId")) || !text(p.path("name"), 200) || !text(p.path("categoryCode"), 50) || !text(p.path("categoryName"), 120)) return false;
+        }
         if (!uuid(p.path("id")) || !text(p.path("sku"), 80)
                 || !Set.of("MATERIAL", "INSUMO", "REPUESTO", "MAQUINARIA").contains(p.path("productType").asText())
                 || !text(p.path("storageUnitCode"), 20) || !text(p.path("baseUnitCode"), 20)

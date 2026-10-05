@@ -33,7 +33,7 @@ public class OutboxPublisher {
 
     public boolean publishNext() {
         Boolean result = transaction.execute(status -> {
-            Optional<OutboxEvent> candidate = events.claimDueProductCreated();
+            Optional<OutboxEvent> candidate = events.claimNextDueEvent();
             if (candidate.isEmpty()) return false;
             OutboxEvent event = candidate.get();
             try {
@@ -59,5 +59,5 @@ public class OutboxPublisher {
         long factor = 1L << Math.min(event.attempts() + 1, 20);
         return Math.min(retryMax, retryBase > retryMax / factor ? retryMax : retryBase * factor);
     }
-    private String routing(OutboxEvent event) { return switch(event.eventType()) { case "ProductCreated" -> routingKey; case "SupplierCreated" -> "catalog.supplier.created.v1"; case "SupplierUpdated" -> "catalog.supplier.updated.v1"; case "SupplierDisabled" -> "catalog.supplier.disabled.v1"; default -> throw new IllegalArgumentException("Unsupported event"); }; }
+    private String routing(OutboxEvent event) { return switch(event.eventType()) { case "ProductCreated" -> routingKey; case "ProductUpdated" -> "catalog.product.updated.v1"; case "SupplierCreated" -> "catalog.supplier.created.v1"; case "SupplierUpdated" -> "catalog.supplier.updated.v1"; case "SupplierDisabled" -> "catalog.supplier.disabled.v1"; default -> throw new IllegalArgumentException("Unsupported event"); }; }
 }

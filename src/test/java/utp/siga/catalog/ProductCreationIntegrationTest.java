@@ -72,6 +72,7 @@ class ProductCreationIntegrationTest {
     @AfterEach
     void cleanup() {
         for (String sku : skus) {
+            jdbc.update("DELETE FROM catalog.outbox_event WHERE aggregate_id IN (SELECT id FROM catalog.product WHERE sku=?)", sku);
             jdbc.update("DELETE FROM catalog.unit_conversion WHERE product_id IN (SELECT id FROM catalog.product WHERE sku=?)", sku);
             jdbc.update("DELETE FROM catalog.product WHERE sku=?", sku);
         }
