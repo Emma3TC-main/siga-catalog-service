@@ -131,7 +131,7 @@ class CategoryIntegrationTest {
         jdbc.update("DELETE FROM catalog.unit_conversion");
         jdbc.update("DELETE FROM catalog.product");
         jdbc.update("DELETE FROM catalog.category");
-        mvc.perform(get("/api/v1/categories").header("Authorization", "Bearer " + token("PRODUCT_WRITE")))
+        mvc.perform(get("/api/v1/categories").header("Authorization", "Bearer " + token("CATALOG_READ")))
                 .andExpect(status().isOk()).andExpect(content().json("[]"));
     }
     @Test void protectsCategoryList() throws Exception {

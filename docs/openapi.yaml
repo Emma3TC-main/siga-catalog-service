@@ -11,6 +11,7 @@ paths:
   /products:
     get:
       summary: List/filter products
+      description: Requires CATALOG_READ or the existing PRODUCT_WRITE management permission.
       parameters:
         - { in: query, name: page, schema: { type: integer, minimum: 0, default: 0 } }
         - { in: query, name: size, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
@@ -46,6 +47,7 @@ paths:
       - $ref: '#/components/parameters/Id'
     get:
       summary: Get product
+      description: Requires CATALOG_READ or the existing PRODUCT_WRITE management permission.
       responses:
         '200':
           description: Product
@@ -80,6 +82,7 @@ paths:
   /suppliers:
     get:
       summary: List/filter suppliers
+      description: Requires CATALOG_READ or the existing SUPPLIER_MANAGE management permission.
       parameters:
         - { in: query, name: page, schema: { type: integer, minimum: 0, default: 0 } }
         - { in: query, name: size, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
@@ -117,6 +120,7 @@ paths:
       - $ref: '#/components/parameters/Id'
     get:
       summary: Get supplier
+      description: Requires CATALOG_READ or the existing SUPPLIER_MANAGE management permission.
       responses:
         '200':
           description: Supplier
@@ -148,6 +152,7 @@ paths:
   /categories:
     get:
       summary: List categories ordered by code, including active and inactive records
+      description: Requires CATALOG_READ or the existing PRODUCT_WRITE management permission.
       responses:
         '200':
           description: Categories
@@ -168,6 +173,7 @@ paths:
   /units:
     get:
       summary: List units ordered by code, including active and inactive records
+      description: Requires CATALOG_READ or the existing PRODUCT_WRITE management permission.
       responses:
         '200':
           description: Units

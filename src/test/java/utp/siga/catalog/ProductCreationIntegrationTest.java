@@ -332,7 +332,7 @@ class ProductCreationIntegrationTest {
         int outbox = jdbc.queryForObject("SELECT count(*) FROM catalog.outbox_event", Integer.class);
         mvc.perform(get("/api/v1/products")).andExpect(status().isUnauthorized());
         mvc.perform(get("/api/v1/products").header("Authorization", "Bearer " + token("INVENTORY_READ"))).andExpect(status().isForbidden());
-        mvc.perform(get("/api/v1/products/{id}", id).header("Authorization", "Bearer " + token("PRODUCT_WRITE"))).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/products/{id}", id).header("Authorization", "Bearer " + token("CATALOG_READ"))).andExpect(status().isOk());
         assertEquals(version, jdbc.queryForObject("SELECT version FROM catalog.product WHERE id=?", Long.class, id));
         assertEquals(outbox, jdbc.queryForObject("SELECT count(*) FROM catalog.outbox_event", Integer.class));
     }

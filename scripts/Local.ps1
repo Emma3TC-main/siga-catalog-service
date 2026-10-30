@@ -120,7 +120,7 @@ GRANT CONNECT ON DATABASE siga_catalog_local_test TO siga_catalog_test;
             $listener = New-Object Net.Sockets.TcpListener([Net.IPAddress]::Loopback,$port)
             try { $listener.Start() } finally { $listener.Stop() }
             $ErrorActionPreference = 'Continue'
-            ./mvnw.cmd -B '-DskipTests' package
+            ./mvnw.cmd -B '-Dsiga.build.directory=.local/build' '-DskipTests' package
             $ErrorActionPreference = 'Stop'
             Check-Exit
             $built = Join-Path $local 'build/siga-catalog-service-0.0.1-SNAPSHOT.jar'

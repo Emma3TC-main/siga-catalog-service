@@ -165,7 +165,7 @@ class SupplierIntegrationTest {
 
         mvc.perform(get("/api/v1/suppliers")).andExpect(status().isUnauthorized());
         mvc.perform(get("/api/v1/suppliers").header("Authorization", bearer("PRODUCT_WRITE"))).andExpect(status().isForbidden());
-        mvc.perform(get("/api/v1/suppliers/{id}", id).header("Authorization", bearer("SUPPLIER_MANAGE")))
+        mvc.perform(get("/api/v1/suppliers/{id}", id).header("Authorization", bearer("CATALOG_READ")))
                 .andExpect(status().isOk()).andExpect(jsonPath("id").value(id.toString()));
         mvc.perform(get("/api/v1/suppliers/{id}", UUID.randomUUID()).header("Authorization", bearer("SUPPLIER_MANAGE")))
                 .andExpect(status().isNotFound()).andExpect(jsonPath("code").value("SUPPLIER_NOT_FOUND"));
