@@ -1,0 +1,1 @@
+package utp.siga.catalog.domain.model; public class SupplierFieldValidationException extends IllegalArgumentException { private final String field; public SupplierFieldValidationException(String field){this.field=field;} public String field(){return field;} }

@@ -13,6 +13,12 @@ spring:
     default-schema: catalog
     create-schemas: false
     clean-disabled: true
+  rabbitmq:
+    host: ${CATALOG_RABBIT_HOST:127.0.0.1}
+    port: ${CATALOG_RABBIT_PORT:5672}
+    username: ${CATALOG_RABBIT_USER}
+    password: ${CATALOG_RABBIT_PASSWORD}
+    publisher-confirm-type: correlated
 management:
   endpoints:
     web:
@@ -27,6 +33,15 @@ management:
         readiness:
           include: readinessState,db
 catalog:
+  outbox:
+    publisher:
+      enabled: ${CATALOG_OUTBOX_PUBLISHER_ENABLED:false}
+      fixed-delay-ms: ${CATALOG_OUTBOX_PUBLISHER_DELAY_MS:1000}
+      confirm-timeout-ms: ${CATALOG_OUTBOX_CONFIRM_TIMEOUT_MS:5000}
+      retry-base-ms: ${CATALOG_OUTBOX_RETRY_BASE_MS:1000}
+      retry-max-ms: ${CATALOG_OUTBOX_RETRY_MAX_MS:60000}
+      exchange: siga.events
+      routing-key: catalog.product.created.v1
   security:
     jwks-uri: ${CATALOG_JWKS_URI:http://127.0.0.1:8081/.well-known/jwks.json}
     issuer: ${CATALOG_JWT_ISSUER:siga-identity}

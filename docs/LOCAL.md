@@ -40,7 +40,7 @@ Catalog escucha solo en `127.0.0.1:8082`; Identity API en 8081 y management en 9
 
 Start compila en `.local/build`, copia el JAR por SHA-256 a `.local/runtime`, registra PID/ruta y espera readiness. Los logs son `.local/catalog.stdout.log` y `.local/catalog.stderr.log`. No sobrescribe `target` versionado. Falla si el PID registrado está vivo o el puerto ocupado. La salud valida la DB; JWKS se obtiene al validar el token, por lo que readiness no implica que Identity esté disponible.
 
-Identity-Local reutiliza `.local/siga-local-runtime/target/siga-identity-service-0.0.1-SNAPSHOT.jar` del repo Identity y su importador de entorno sin `-Instance`. No compila ni modifica código/claves IAM. Registra el proceso iniciado en **Catalog** `.local/identity.*`; si Identity ya estaba saludable, lo conserva. Para otra máquina sin ese runtime, seguir `siga-identity-service/docs/LOCAL.md` para preparar el runtime de su entorno histórico antes de ejecutar este helper. No usar `-Instance repro-20260926`.
+Identity-Local reutiliza `target/siga-identity-service-0.0.1-SNAPSHOT.jar` y el importador de entorno sin `-Instance` del repo Identity. No compila ni modifica código/claves IAM. Registra el proceso iniciado en **Catalog** `.local/identity.*`; si Identity ya estaba saludable, lo conserva. Para otra máquina sin ese JAR, seguir `siga-identity-service/docs/LOCAL.md` para prepararlo mediante el procedimiento local, sin regenerar claves ni usar `-Instance repro-20260926`.
 
 ## Pruebas
 
@@ -69,4 +69,4 @@ Los helpers comprueban PID y JAR antes de parar procesos. El helper Identity sol
 
 ## Alcance pendiente
 
-Gateway no contiene aplicación funcional; la prueba realizada es Identity → Catalog directo en loopback. Contratos pendientes de categorías/unidades, actualización y eventos: ver [REVISION.md](REVISION.md). No hay publicador RabbitMQ, cliente Redis ni integración MinIO en esta slice.
+Gateway no contiene aplicación funcional; la prueba realizada es Identity → Catalog directo en loopback. Contratos pendientes de categorías/unidades: ver [REVISION.md](REVISION.md). Catalog publica `ProductCreated`, `ProductUpdated` y los tres eventos Supplier mediante outbox transaccional y RabbitMQ; Redis y MinIO no participan en esta slice.

@@ -35,6 +35,7 @@ import utp.siga.catalog.domain.model.ProductReferenceException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest
@@ -71,6 +72,7 @@ class ProductCreationIntegrationTest {
     @AfterEach
     void cleanup() {
         for (String sku : skus) {
+            jdbc.update("DELETE FROM catalog.outbox_event WHERE aggregate_id IN (SELECT id FROM catalog.product WHERE sku=?)", sku);
             jdbc.update("DELETE FROM catalog.unit_conversion WHERE product_id IN (SELECT id FROM catalog.product WHERE sku=?)", sku);
             jdbc.update("DELETE FROM catalog.product WHERE sku=?", sku);
         }
@@ -115,6 +117,14 @@ class ProductCreationIntegrationTest {
         return "{\"sku\":\"" + sku + "\",\"name\":\"Producto REST\",\"categoryId\":\"" + category
                 + "\",\"productType\":\"MATERIAL\",\"storageUnitId\":\"" + storage + "\",\"baseUnitId\":\""
                 + base + "\",\"minStock\":12.345678,\"technicalAttributes\":{\"grade\":\"A36\"},\"conversions\":" + conversions + "}";
+    }
+
+    private UUID product(String sku, String name, UUID category, UUID storage, UUID base, String type, boolean active) {
+        UUID id = UUID.randomUUID();
+        skus.add(sku);
+        jdbc.update("INSERT INTO catalog.product(id,sku,name,category_id,product_type,storage_unit_id,base_unit_id,min_stock,requires_lot,requires_heat_number,requires_expiry,requires_serial,technical_attributes,active) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?::jsonb,?)",
+                id, sku, name, category, type, storage, base, BigDecimal.ZERO, false, false, false, false, "{}", active);
+        return id;
     }
 
     @Test
@@ -251,5 +261,79 @@ class ProductCreationIntegrationTest {
                         .content(json("P-" + UUID.randomUUID(), category, storage, base, "[]")))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("code").value("VALIDATION_ERROR"));
         assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM catalog.product WHERE sku=?", Integer.class, sku));
+    }
+
+    @Test
+    void listsProductsWithCombinedFiltersLiteralQueryAndStableOrder() throws Exception {
+        UUID category = category(true), otherCategory = category(true), unit = unit(true);
+        UUID expected = product("SKU%_MATCH", "Mismo nombre", category, unit, unit, "MATERIAL", true);
+        product("SKU-OTHER", "Mismo nombre", category, unit, unit, "MATERIAL", true);
+        product("SKU%_INACTIVE", "Inactivo", category, unit, unit, "MATERIAL", false);
+        product("SKU%_OTHER_CATEGORY", "Otro", otherCategory, unit, unit, "MATERIAL", true);
+        String bearer = "Bearer " + token("PRODUCT_WRITE");
+
+        mvc.perform(get("/api/v1/products").header("Authorization", bearer)
+                        .param("q", "%_").param("active", "true").param("categoryId", category.toString())
+                        .param("productType", "MATERIAL").param("sort", "name,asc"))
+                .andExpect(status().isOk()).andExpect(jsonPath("content.length()").value(1))
+                .andExpect(jsonPath("content[0].id").value(expected.toString()))
+                .andExpect(jsonPath("page").value(0)).andExpect(jsonPath("size").value(20))
+                .andExpect(jsonPath("totalElements").value(1));
+    }
+
+    @Test
+    void pagesAndOrdersByNameWithIdAsStableTieBreaker() throws Exception {
+        UUID category = category(true), unit = unit(true);
+        UUID first = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID second = UUID.fromString("00000000-0000-0000-0000-000000000002");
+        skus.add("PAGE-A"); skus.add("PAGE-B");
+        jdbc.update("INSERT INTO catalog.product(id,sku,name,category_id,product_type,storage_unit_id,base_unit_id,min_stock,requires_lot,requires_heat_number,requires_expiry,requires_serial,technical_attributes,active) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?::jsonb,?)", first, "PAGE-A", "Igual", category, "MATERIAL", unit, unit, BigDecimal.ZERO, false, false, false, false, "{}", true);
+        jdbc.update("INSERT INTO catalog.product(id,sku,name,category_id,product_type,storage_unit_id,base_unit_id,min_stock,requires_lot,requires_heat_number,requires_expiry,requires_serial,technical_attributes,active) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?::jsonb,?)", second, "PAGE-B", "Igual", category, "MATERIAL", unit, unit, BigDecimal.ZERO, false, false, false, false, "{}", true);
+        String bearer = "Bearer " + token("PRODUCT_WRITE");
+
+        mvc.perform(get("/api/v1/products").header("Authorization", bearer).param("sort", "name,asc").param("size", "1").param("page", "0").param("categoryId", category.toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("content[0].id").value(first.toString()));
+        mvc.perform(get("/api/v1/products").header("Authorization", bearer).param("sort", "name,asc").param("size", "1").param("page", "1").param("categoryId", category.toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("content[0].id").value(second.toString()));
+    }
+
+    @Test
+    void returnsEmptyPageAndRejectsInvalidQueryParameters() throws Exception {
+        String bearer = "Bearer " + token("PRODUCT_WRITE");
+        mvc.perform(get("/api/v1/products").header("Authorization", bearer).param("q", "no-coincide"))
+                .andExpect(status().isOk()).andExpect(jsonPath("content.length()").value(0))
+                .andExpect(jsonPath("page").value(0)).andExpect(jsonPath("size").value(20)).andExpect(jsonPath("totalElements").value(0));
+        for (String parameter : List.of("page=-1", "size=0", "size=101", "sort=id,asc", "categoryId=no-uuid")) {
+            String[] pair = parameter.split("=", 2);
+            mvc.perform(get("/api/v1/products").header("Authorization", bearer).param(pair[0], pair[1]))
+                    .andExpect(status().isBadRequest()).andExpect(jsonPath("code").value("VALIDATION_ERROR"));
+        }
+    }
+
+    @Test
+    void getsActiveAndInactiveProductsAndReportsMissingProduct() throws Exception {
+        UUID category = category(true), storage = unit(true), base = unit(true);
+        UUID active = product("DETAIL-A", "Activo", category, storage, base, "MATERIAL", true);
+        jdbc.update("INSERT INTO catalog.unit_conversion(product_id,from_unit_id,to_unit_id,factor,active) VALUES (?,?,?,?,?)", active, storage, base, new BigDecimal("2.500000"), true);
+        UUID inactive = product("DETAIL-I", "Inactivo", category, storage, storage, "MATERIAL", false);
+        String bearer = "Bearer " + token("PRODUCT_WRITE");
+        mvc.perform(get("/api/v1/products/{id}", active).header("Authorization", bearer)).andExpect(status().isOk()).andExpect(jsonPath("active").value(true))
+                .andExpect(jsonPath("conversions[0].factor").value(2.5));
+        mvc.perform(get("/api/v1/products/{id}", inactive).header("Authorization", bearer)).andExpect(status().isOk()).andExpect(jsonPath("active").value(false));
+        mvc.perform(get("/api/v1/products/{id}", UUID.randomUUID()).header("Authorization", bearer))
+                .andExpect(status().isNotFound()).andExpect(jsonPath("code").value("PRODUCT_NOT_FOUND"));
+    }
+
+    @Test
+    void productQueriesRequirePermissionAndDoNotWriteData() throws Exception {
+        UUID category = category(true), unit = unit(true);
+        UUID id = product("READ-ONLY", "Solo lectura", category, unit, unit, "MATERIAL", true);
+        long version = jdbc.queryForObject("SELECT version FROM catalog.product WHERE id=?", Long.class, id);
+        int outbox = jdbc.queryForObject("SELECT count(*) FROM catalog.outbox_event", Integer.class);
+        mvc.perform(get("/api/v1/products")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/products").header("Authorization", "Bearer " + token("INVENTORY_READ"))).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/products/{id}", id).header("Authorization", "Bearer " + token("CATALOG_READ"))).andExpect(status().isOk());
+        assertEquals(version, jdbc.queryForObject("SELECT version FROM catalog.product WHERE id=?", Long.class, id));
+        assertEquals(outbox, jdbc.queryForObject("SELECT count(*) FROM catalog.outbox_event", Integer.class));
     }
 }

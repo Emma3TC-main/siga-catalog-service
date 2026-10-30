@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.core.env.Environment;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -45,6 +46,7 @@ class CategoryIntegrationTest {
     @AfterAll static void shutdown() { jwks.stop(0); }
     @Autowired MockMvc mvc;
     @Autowired JdbcTemplate jdbc;
+    @Autowired Environment environment;
     final List<String> created = new ArrayList<>();
     String code() { String code="IT-"+UUID.randomUUID(); created.add(code); return code; }
     @AfterEach void cleanup() { for (String code:created) jdbc.update("DELETE FROM catalog.category WHERE code=?",code); }
@@ -129,7 +131,7 @@ class CategoryIntegrationTest {
         jdbc.update("DELETE FROM catalog.unit_conversion");
         jdbc.update("DELETE FROM catalog.product");
         jdbc.update("DELETE FROM catalog.category");
-        mvc.perform(get("/api/v1/categories").header("Authorization", "Bearer " + token("PRODUCT_WRITE")))
+        mvc.perform(get("/api/v1/categories").header("Authorization", "Bearer " + token("CATALOG_READ")))
                 .andExpect(status().isOk()).andExpect(content().json("[]"));
     }
     @Test void protectsCategoryList() throws Exception {
@@ -137,8 +139,10 @@ class CategoryIntegrationTest {
         mvc.perform(get("/api/v1/categories").header("Authorization", "Bearer " + token("INVENTORY_READ"))).andExpect(status().isForbidden());
     }
     @Test void databaseOwnershipAndIsolation() {
-        assertEquals("siga_catalog_test",jdbc.queryForObject("SELECT current_user",String.class));
-        assertEquals("siga_catalog_local_test",jdbc.queryForObject("SELECT current_database()",String.class));
+        assertEquals(environment.getProperty("catalog.test.expected-user", "siga_catalog_test"),
+                jdbc.queryForObject("SELECT current_user",String.class));
+        assertEquals(environment.getProperty("catalog.test.expected-database", "siga_catalog_local_test"),
+                jdbc.queryForObject("SELECT current_database()",String.class));
         assertEquals(7,jdbc.queryForObject("SELECT count(*) FROM pg_tables WHERE schemaname='catalog'",Integer.class));
         assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM pg_tables WHERE schemaname='iam'",Integer.class));
         assertEquals(false,jdbc.queryForObject("SELECT has_database_privilege(current_user,'siga','CONNECT')",Boolean.class));

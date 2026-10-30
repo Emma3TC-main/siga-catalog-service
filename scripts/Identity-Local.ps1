@@ -26,8 +26,8 @@ foreach($port in @(8081,9081)) {
 $env:DEBUG='false'
 $env:PORT='8081'
 $env:MANAGEMENT_PORT='9081'
-$jar=Join-Path $identityRoot '.local/siga-local-runtime/target/siga-identity-service-0.0.1-SNAPSHOT.jar'
-if (!(Test-Path $jar)) { throw 'Historical Identity runtime missing. Follow Identity docs/LOCAL.md; do not regenerate keys.' }
+$jar=Join-Path $identityRoot 'target/siga-identity-service-0.0.1-SNAPSHOT.jar'
+if (!(Test-Path $jar)) { throw 'Identity JAR is missing. Build it with the documented Identity local procedure; do not regenerate keys.' }
 New-Item -ItemType Directory -Force $state | Out-Null
 $process=Start-Process (Get-Command java).Source -ArgumentList @('-jar',('"{0}"' -f $jar)) -WorkingDirectory $identityRoot -WindowStyle Hidden -PassThru -RedirectStandardOutput "$state/identity.stdout.log" -RedirectStandardError "$state/identity.stderr.log"
 $process.Id | Set-Content "$state/identity.pid"

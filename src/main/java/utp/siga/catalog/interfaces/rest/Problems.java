@@ -1,6 +1,7 @@
 package utp.siga.catalog.interfaces.rest;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.*;
+import jakarta.validation.ConstraintViolationException;
 import java.io.IOException;
 import java.util.Map;
 import java.util.HashMap;
@@ -9,9 +10,15 @@ import org.springframework.http.*;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import utp.siga.catalog.domain.model.UnitFieldValidationException;
 import utp.siga.catalog.domain.model.ProductFieldValidationException;
 import utp.siga.catalog.domain.model.ProductReferenceException;
+import utp.siga.catalog.domain.model.ProductNotFoundException;
+import utp.siga.catalog.domain.model.ProductVersionConflictException;
+import utp.siga.catalog.domain.model.SupplierNotFoundException;
+import utp.siga.catalog.domain.model.SupplierFieldValidationException;
+import utp.siga.catalog.domain.model.SupplierVersionConflictException;
 @RestControllerAdvice
 public class Problems {
     public static Map<String,Object> body(HttpServletRequest req, int status, String code, String detail) {
@@ -28,7 +35,7 @@ public class Problems {
         return ResponseEntity.status(status).contentType(MediaType.APPLICATION_PROBLEM_JSON).body(body(req,status,code,detail));
     }
     private boolean units(HttpServletRequest req) { return "/api/v1/units".equals(req.getRequestURI()); }
-    private boolean products(HttpServletRequest req) { return "/api/v1/products".equals(req.getRequestURI()); }
+    private boolean products(HttpServletRequest req) { return req.getRequestURI().startsWith("/api/v1/products"); }
     private String unitField(String field) { return "Revisa el campo " + field + " de la unidad"; }
     @ExceptionHandler(UnitFieldValidationException.class)
     ResponseEntity<?> invalidUnit(UnitFieldValidationException e,HttpServletRequest req) {
@@ -47,6 +54,25 @@ public class Problems {
                 e.missing() ? "La referencia indicada no existe" : "La referencia indicada está inactiva"));
         body.put("field",e.field());
         return ResponseEntity.status(status).contentType(MediaType.APPLICATION_PROBLEM_JSON).body(body);
+    }
+    @ExceptionHandler(ProductNotFoundException.class)
+    ResponseEntity<?> productMissing(HttpServletRequest req) {
+        return response(req,404,"PRODUCT_NOT_FOUND","El producto indicado no existe");
+    }
+    @ExceptionHandler(ProductVersionConflictException.class)
+    ResponseEntity<?> productConflict(HttpServletRequest req) {
+        return response(req,409,"VERSION_CONFLICT","La versión del producto no coincide");
+    }
+    @ExceptionHandler(SupplierNotFoundException.class) ResponseEntity<?> supplierMissing(HttpServletRequest req) { return response(req,404,"SUPPLIER_NOT_FOUND","El proveedor indicado no existe"); }
+    @ExceptionHandler(SupplierFieldValidationException.class) ResponseEntity<?> supplierInvalid(SupplierFieldValidationException e,HttpServletRequest req) { return response(req,400,"VALIDATION_ERROR","Revisa el campo "+e.field()+" del proveedor"); }
+    @ExceptionHandler(SupplierVersionConflictException.class) ResponseEntity<?> supplierConflict(HttpServletRequest req) { return response(req,409,"VERSION_CONFLICT","La versión del proveedor no coincide"); }
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    ResponseEntity<?> invalidParameter(MethodArgumentTypeMismatchException e,HttpServletRequest req) {
+        return response(req,400,"VALIDATION_ERROR",products(req) ? "Revisa el parámetro " + e.getName() + " del producto" : "Revisa los parámetros de la solicitud");
+    }
+    @ExceptionHandler(ConstraintViolationException.class)
+    ResponseEntity<?> invalidConstraint(HttpServletRequest req) {
+        return response(req,400,"VALIDATION_ERROR",products(req) ? "Revisa los parámetros del producto" : "Revisa los parámetros de la solicitud");
     }
     @ExceptionHandler(MethodArgumentNotValidException.class)
     ResponseEntity<?> invalidFields(MethodArgumentNotValidException e,HttpServletRequest req) {

@@ -8,6 +8,13 @@ class TestDatabaseSafetyTest {
             .withProperty("spring.datasource.username","siga_catalog_test")
             .withProperty("spring.flyway.schemas","catalog").withProperty("spring.flyway.default-schema","catalog"); }
     @Test void allowsDedicatedDatabase() { assertDoesNotThrow(() -> TestDatabaseSafety.validate(safe())); }
+    @Test void allowsExplicitEphemeralDedicatedDatabase() {
+        assertDoesNotThrow(() -> TestDatabaseSafety.validate(safe()
+                .withProperty("catalog.test.expected-database", "siga_catalog_productupdated_review_test")
+                .withProperty("catalog.test.expected-user", "siga_catalog_productupdated_review_test")
+                .withProperty("spring.datasource.url", "jdbc:postgresql://127.0.0.1:15432/siga_catalog_productupdated_review_test")
+                .withProperty("spring.datasource.username", "siga_catalog_productupdated_review_test")));
+    }
     @Test void rejectsSharedDatabaseAndParameters() {
         for (String url : new String[]{"jdbc:postgresql://127.0.0.1:15432/siga", "jdbc:postgresql://127.0.0.1:15432/siga_catalog_local_test?user=postgres"})
             assertThrows(IllegalStateException.class,() -> TestDatabaseSafety.validate(safe().withProperty("spring.datasource.url",url)));
@@ -16,6 +23,12 @@ class TestDatabaseSafetyTest {
         assertThrows(IllegalStateException.class,() -> TestDatabaseSafety.validate(safe().withProperty("spring.datasource.username","postgres")));
         for (String key : new String[]{"spring.flyway.url","spring.datasource.hikari.jdbc-url","spring.datasource.jndi-name"})
             assertThrows(IllegalStateException.class,() -> TestDatabaseSafety.validate(safe().withProperty(key,"anything")));
+    }
+    @Test void rejectsUnsafeExpectedTargets() {
+        assertThrows(IllegalStateException.class, () -> TestDatabaseSafety.validate(safe()
+                .withProperty("catalog.test.expected-database", "siga")));
+        assertThrows(IllegalStateException.class, () -> TestDatabaseSafety.validate(safe()
+                .withProperty("catalog.test.expected-user", "postgres")));
     }
     @Test void guardRunsBeforeSingletonsCanConnect() {
         var connected = new java.util.concurrent.atomic.AtomicBoolean();
